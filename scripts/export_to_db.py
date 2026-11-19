@@ -32,12 +32,14 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+import yaml
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent
 SRID = 25831
 
 GPKG_NAME = "CoolCycle_Viladecans.gpkg"
+TRAIL_MAPPING_FILE = SCRIPTS_DIR / "trail_mapping.yaml"
 SOLAR_GEOJSON_NAME = "bike_solar_screen_geojson.geojson"
 
 DATA_SOURCES = [
@@ -72,23 +74,11 @@ DATA_SOURCES = [
 ]
 
 # Synthetic routes have no geometry; they are linked to real segments by street name.
-# Edit this mapping (or add 'manual' rows to syn_segment_link) to refine it.
-STREET_MATCH: dict[str, list[str]] = {
-    "TRM-01": ["Avinguda de la Generalitat"],
-    "TRM-02": ["Carretera de Barcelona (C-245)"],
-    "TRM-03": ["Passeig de la Marina"],
-    "TRM-04": ["Carrer del Doctor Reig"],
-    "TRM-05": ["Avinguda de Gavà"],
-    "TRM-06": ["Avinguda de Josep Tarradellas"],
-    "TRM-07": ["Parc del Torrent Ballester"],
-    "TRM-08": ["Avinguda de Can Palmer"],
-    "TRM-09": ["Avinguda de la Roureda", "camí de la Roureda"],
-    "TRM-10": ["Carretera de la Vila"],
-    "TRM-11": ["Carrer del Sol"],
-    "TRM-12": ["Avinguda d’Olof Palme"],
-    "TRM-13": ["camí de les Filipines"],  # Agrarian Path: assumed, the rural route south to the coast
-    "TRM-14": ["Avinguda de la Fraternitat"],
-}
+# The mapping lives in scripts/trail_mapping.yaml (TRM-13 is left out: no real street match).
+# Edit it (or add 'manual' rows to syn_segment_link) to refine the links.
+def street_match() -> dict[str, list[str]]:
+    return yaml.safe_load(TRAIL_MAPPING_FILE.read_text(encoding="utf-8"))
+
 
 # How each catalogue entry is costed and where it can be placed (parsed from the unit text).
 INTERVENTION_UNITS: dict[str, tuple[str, str]] = {
@@ -103,7 +93,7 @@ INTERVENTION_UNITS: dict[str, tuple[str, str]] = {
 }
 
 DATA_TABLES = [
-    "plan_item", "plan", "segment_metrics", "syn_segment_link", "syn_segment", "hourly_profile",
+    "plan_item", "plan", "segment_metrics", "syn_segment_link", "syn_point", "syn_segment", "hourly_profile",
     "intervention_type", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
     "data_source",
 ]
@@ -296,15 +286,35 @@ def seed_synthetic(cur: psycopg.Cursor, gpkg: sqlite3.Connection, source_id: int
             "daily_cyclists_spring": r["daily_cyclists_spring"],
             "daily_cyclists_summer": r["daily_cyclists_summer"],
             "ridership_drop_pct": r["summer_ridership_drop_pct"],
+            "nearest_shelter_id": r["nearest_climate_shelter_id"],
+            "thermal_risk_level": r["thermal_risk_level"],
         }
         for r in gpkg_rows(gpkg, "vas_segment_metrics")
+    ])
+
+    # Junctions (CRU-*), climate shelters (REF-*) and bike stations (EST-*), at their synthetic coordinates.
+    upsert(cur, "syn_point", [
+        {
+            "id": r["point_id"],
+            "source_id": source_id,
+            "name": r["point_name"],
+            "category": r["category"],
+            "syn_segment_id": r["linked_segment_id"],
+            "traffic_light_wait_s": r["traffic_light_wait_sec"],
+            "shade_pct": r["current_shade_pct"],
+            "temp_anomaly_c": r["local_temp_anomaly_c"],
+            "notes": r["notes"],
+            "geom": gpkg_wkb(r["geom"]),
+        }
+        for r in gpkg_rows(gpkg, "vas_synthetic_points")
     ])
 
 
 def link_synthetic_segments(cur: psycopg.Cursor) -> None:
     """Rebuild street-name links; links added by hand ('manual') are kept."""
     cur.execute("DELETE FROM syn_segment_link WHERE match_method = 'street_name'")
-    for syn_id, streets in STREET_MATCH.items():
+    mapping = street_match()
+    for syn_id, streets in mapping.items():
         for street in streets:
             cur.execute(
                 """INSERT INTO syn_segment_link (syn_segment_id, segment_id, match_method)
@@ -316,7 +326,7 @@ def link_synthetic_segments(cur: psycopg.Cursor) -> None:
                 print(f"  warning: {syn_id} street {street!r} matched no segments", file=sys.stderr)
     cur.execute("SELECT count(*), count(DISTINCT syn_segment_id) FROM syn_segment_link")
     links, routes = cur.fetchone()
-    print(f"  {'syn_segment_link':<20} {links:>5} rows ({routes} of {len(STREET_MATCH)} routes linked)")
+    print(f"  {'syn_segment_link':<20} {links:>5} rows ({routes} of {len(mapping)} mapped routes linked)")
 
 
 # ---------------------------------------------------------------- aggregation

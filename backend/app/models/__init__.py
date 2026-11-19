@@ -11,6 +11,7 @@ from app.models.intervention_type import InterventionType
 from app.models.plan import Plan
 from app.models.plan_item import PlanItem
 from app.models.segment_metrics import SegmentMetrics
+from app.models.syn_point import SynPoint
 from app.models.syn_segment import SynSegment
 from app.models.syn_segment_link import SynSegmentLink
 
@@ -27,6 +28,7 @@ __all__ = [
     "Plan",
     "PlanItem",
     "SegmentMetrics",
+    "SynPoint",
     "SynSegment",
     "SynSegmentLink",
 ]
