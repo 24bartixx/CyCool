@@ -84,7 +84,15 @@ export default function PlannerPage() {
     </PointDrawer>
   )
   const plan = ev && (
-    <PlanList plan={ev.plan} pointsById={pl.pointsById} onUndo={pl.undo} onReset={pl.reset} onSelect={select} busy={pl.evaluating} />
+    <PlanList
+      plan={ev.plan}
+      pointsById={pl.pointsById}
+      onRemove={pl.remove}
+      onUndo={pl.undo}
+      onReset={pl.reset}
+      onSelect={select}
+      busy={pl.evaluating}
+    />
   )
 
   return (

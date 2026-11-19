@@ -149,6 +149,10 @@ export function usePlanner() {
     setNotice(undefined)
     setAccepted((prev) => [...prev, { fix_id, point_id }])
   }, [])
+  const remove = useCallback((fixId: string, pointId: string) => {
+    setNotice(undefined)
+    setAccepted((prev) => prev.filter((fix) => fix.fix_id !== fixId || fix.point_id !== pointId))
+  }, [])
   const undo = useCallback(() => {
     setNotice(undefined)
     setAccepted((prev) => prev.slice(0, -1))
@@ -176,6 +180,7 @@ export function usePlanner() {
     dismissNotice: () => setNotice(undefined),
     accepted,
     accept,
+    remove,
     undo,
     reset,
     selectedId,

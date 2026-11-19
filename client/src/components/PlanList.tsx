@@ -1,4 +1,4 @@
-import { RotateCcw, Undo2 } from 'lucide-react'
+import { RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur } from '../lib/format.ts'
 import { FIX_ICON } from '../lib/icons.tsx'
@@ -7,18 +7,18 @@ import { pointTitle } from '../lib/points.ts'
 type Props = {
   plan: Evaluation['plan']
   pointsById: Map<string, MapPointInfo>
+  onRemove: (fixId: string, pointId: string) => void
   onUndo: () => void
   onReset: () => void
   onSelect: (id: string) => void
   busy: boolean
 }
 
-export default function PlanList({ plan, pointsById, onUndo, onReset, onSelect, busy }: Props) {
+export default function PlanList({ plan, pointsById, onRemove, onUndo, onReset, onSelect, busy }: Props) {
   return (
     <section aria-labelledby="plan-h" className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <h2 id="plan-h" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
-          <span className="grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground">4</span>
+        <h2 id="plan-h" className="text-xs font-semibold uppercase tracking-wide text-muted">
           Your plan ({plan.length})
         </h2>
         <div className="flex gap-1">
@@ -48,24 +48,35 @@ export default function PlanList({ plan, pointsById, onUndo, onReset, onSelect, 
         <ol className="space-y-1">
           {plan.map((f, i) => {
             const Icon = FIX_ICON[f.fix_id]
-            const p = pointsById.get(f.point_id)
+            const point = pointsById.get(f.point_id)
+            const location = point ? pointTitle(point) : f.point_id
             return (
-              <li key={`${f.fix_id}-${f.point_id}`}>
+              <li key={`${f.fix_id}-${f.point_id}`} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => onSelect(f.point_id)}
-                  className="grid w-full grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2"
+                  className="grid min-w-0 flex-1 grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2"
                 >
                   <span className={`grid size-7 place-items-center rounded-full text-white ${f.fix_id === 'INT-03' ? 'bg-water' : 'bg-primary'}`}>
                     <Icon className="size-3.5" aria-hidden />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">
+                    <span className="line-clamp-2 text-sm leading-tight font-medium">
                       {i + 1}. {f.label}
                     </span>
-                    <span className="block truncate text-[11px] text-muted">{p ? pointTitle(p) : f.point_id}</span>
+                    <span className="block truncate text-[11px] text-muted">{location}</span>
                   </span>
                   <span className="text-xs font-semibold tabular-nums">{eur(f.cost_eur)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(f.fix_id, f.point_id)}
+                  disabled={busy}
+                  aria-label={`Remove item ${i + 1}, ${f.label} at ${location}`}
+                  title="Remove from plan"
+                  className="grid size-8 shrink-0 place-items-center rounded-md text-muted transition-colors enabled:hover:bg-danger-soft enabled:hover:text-danger enabled:hover:inset-ring-1 enabled:hover:inset-ring-danger/50 disabled:opacity-50 motion-safe:enabled:hover:[&>svg]:animate-trash-wiggle"
+                >
+                  <Trash2 className="size-4" aria-hidden />
                 </button>
               </li>
             )
