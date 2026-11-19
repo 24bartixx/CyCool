@@ -1,5 +1,5 @@
 /*
- * CyCool palette: the single place to change colours.
+ * CoolCycle palette: the single place to change colours.
  *
  * Every `--color-<name>` token becomes a Tailwind utility (bg-<name>, text-<name>, border-<name>/50 ...)
  * and a plain CSS variable (var(--color-<name>)). The map reads the score ramp from these variables too.
