@@ -1,33 +1,48 @@
 /*
- * App color palette — the single place to change colors.
+ * CyCool palette: the single place to change colours.
  *
- * Every `--color-<name>` token below becomes a Tailwind utility automatically:
- *   --color-primary  ->  bg-primary, text-primary, border-primary, ring-primary, ...
- * Opacity modifiers work too: bg-primary/10, border-danger/30, ...
+ * Every `--color-<name>` token becomes a Tailwind utility (bg-<name>, text-<name>, border-<name>/50 ...)
+ * and a plain CSS variable (var(--color-<name>)). The map reads the score ramp from these variables too.
  *
- * The tokens are also plain CSS variables, so non-Tailwind CSS can use them:
- *   color: var(--color-primary);
- *
- * `static` makes Tailwind emit all tokens even if no utility uses them yet.
+ * Score ramp: one hue (orange), light -> dark, 5 ordinal classes. Validated with the dataviz
+ * validator (--ordinal): monotone lightness, visible step gaps, light end >= 2:1 on the map surface.
+ * "score-fine" (cool teal) marks points with a score of ~0 (nothing to fix).
  */
 @theme static {
-  /* Brand */
-  --color-primary: #0369a1;
+  /* Brand: deep teal = shade / cool */
+  --color-primary: #0f5e63;
+  --color-primary-hover: #0b4a4e;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f59e0b;
-  --color-secondary-foreground: #1c1917;
+  --color-primary-soft: #e2eeed;
 
-  /* Surfaces */
-  --color-background: #f8fafc;
+  /* Surfaces (warm off-white, like sun-bleached paper) */
+  --color-background: #f4f3ef;
   --color-surface: #ffffff;
-  --color-border: #e2e8f0;
+  --color-surface-2: #f9f8f5;
+  --color-border: #e3e1da;
+  --color-border-strong: #c9c6bc;
 
   /* Text */
   --color-foreground: #0f172a;
-  --color-muted: #64748b;
+  --color-muted: #5b6670;
 
-  /* Status */
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-danger: #dc2626;
+  /* Status (always paired with an icon or label) */
+  --color-success: #0c7a3e;
+  --color-warning: #a35a00;
+  --color-warning-soft: #fdf0d9;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+
+  /* Data: score ramp (0 = fine ... 1 = worst) */
+  --color-score-fine: #4f9a94;
+  --color-score-1: #eb9a4f;
+  --color-score-2: #de7a2e;
+  --color-score-3: #c4581b;
+  --color-score-4: #9c3c12;
+  --color-score-5: #6e270c;
+
+  /* Data: water and context */
+  --color-water: #2a78d6;
+  --color-water-soft: #dbe9fa;
+  --color-network: #b9b6ac;
 }

@@ -1,8 +1,120 @@
 @import 'tailwindcss';
 @import './theme/colors.css';
+@import 'leaflet/dist/leaflet.css';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'tnum' 1; /* tabular numbers keep KPIs from jumping */
   }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* ---------- map markers (Leaflet divIcons) ---------- */
+.cc-marker {
+  display: grid;
+  place-items: center;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  color: #fff;
+}
+.cc-marker--junction {
+  border-radius: 9999px;
+}
+.cc-marker--station {
+  border-radius: 5px;
+}
+.cc-marker--selected {
+  outline: 3px solid var(--color-foreground);
+  outline-offset: 1px;
+}
+.cc-fix-badge {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+.cc-fix-badge--water {
+  background: var(--color-water);
+}
+
+.cc-worst-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  border: 3px solid var(--color-score-5);
+  animation: cc-pulse 1.8s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes cc-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-worst-ring {
+    animation: none;
+    opacity: 0.9;
+  }
+}
+
+.leaflet-container {
+  font-family: inherit;
+  background: #ecebe6;
+}
+.leaflet-tooltip.cc-tooltip {
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px rgb(15 23 42 / 0.12);
+  padding: 6px 10px;
+  color: var(--color-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* skeleton shimmer for loading states */
+.cc-skeleton {
+  background: linear-gradient(90deg, #ecebe6 25%, #f6f5f1 50%, #ecebe6 75%);
+  background-size: 200% 100%;
+  animation: cc-shimmer 1.4s infinite;
+  border-radius: 8px;
+}
+@keyframes cc-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-skeleton {
+    animation: none;
+  }
+}
+
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.45);
+}
+
+/* calm, low-saturation basemap so the score colours carry the meaning */
+.cc-basemap {
+  filter: grayscale(0.9) contrast(0.88) brightness(1.06);
 }

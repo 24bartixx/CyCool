@@ -1,7 +1,70 @@
 # Project idea
 
-Provide a set of tools to help Viladecans city authorizties manage cicling lanes. The project will help determine best placement of fast-growing shade trees, cyclist-oasis micro-shelters, solar reflective coating on cycle lanes and drinking water fountains witihin the budget.
+A tool that helps Viladecans city planners decide where to spend a limited budget to make summer cycling comfortable, and on which fixes (VAS-R1 challenge).
+
+The planner enters a **budget** and picks a **metric**. The map shows the **worst point** for that metric. Clicking it shows the recommended fixes from the cost catalogue. Accepting a fix deducts its cost and recalculates everything, and the next worst point appears. Undo reverts the last accepted fix.
+
+## Metrics (0 = fine, 1 = worst)
+- **Water access**: distance to the nearest water point. A fountain within 100 m counts as a short detour; a score of 1 means 300 m or more.
+- **Sun exposure**: real solar value per segment (`solar_mean_positive`, assumed W/m²), scaled between the trail minimum and maximum. At junctions it is the mean of that and the red-light wait exposure (wait / 70 s × unshaded share).
+- **Temperature**: synthetic UTCI at 14 h per trail, plus the local temperature anomaly at junctions.
+- **Combined**: the mean of the three, with equal weights.
+
+**Worst = metric × spring riders × segment length / 100 m.** Busy streets come first.
+
+## Fixes (catalogue INT-01 to INT-06 only)
+| ID | Fix | Where |
+|---|---|---|
+| INT-01 | Shade trees (12 trees per 100 m) | per 100 m of trail |
+| INT-02 | Shade sail at traffic-light waiting box | junctions |
+| INT-03 | Cyclist Oasis (pergola + chilled fountain + mist + bench) | any point. **This is the only water fix** |
+| INT-04 | Cool pavement coating | per 100 m of trail |
+| INT-05 | Heat-triggered green-wave traffic lights | junctions |
+| INT-06 | Solar canopy at bike station | stations EST-B01, EST-B02 |
+
+Not used:
+- INT-07 (app) is city-wide and has no location.
+- INT-08 is only the KPI factors: 0.72 kg CO₂e and €1.15 per replaced trip.
+- There is no standalone drinking fountain.
 
 # Rules
 
-1.
+1. **Scope is the VAS-R1 trails only, mapped onto real streets.** A trail is all network segments ("odcinki") on its matched street; the mapping is in `scripts/trail_mapping.yaml`.
+   - 13 trails.
+   - TRM-13 Agrarian Path is dropped because there is no real street match.
+   - TRM-03 is Passeig de la Marina only.
+   - The rest of the network is shown grey.
+   - The 3 "Carril Bici_En Projecte DIBA" lines are excluded.
+2. **Clickable points:**
+   - each segment on a trail, with segments over 100 m split into ~50 m pieces
+   - the 5 CRU traffic-light junctions and the 2 bike stations (EST-B01/B02), snapped onto their own trail and labelled as approximate locations, because their synthetic coordinates are 140–850 m off
+3. **Data sources:**
+   - **Real (municipal):** segment geometry, length, solar value, fountain locations (`Data/bike_solar_screen_geojson.geojson`, EPSG:25831). Cemetery fountains are excluded.
+   - **Synthetic (VAS-R1):** temperature/UTCI, riders, junctions, shelters, catalogue costs and effects.
+4. **The VAS-R1 dataset is synthetic.** Never present it as real Viladecans data, and show a "synthetic/demo data" label in the UI.
+5. **Every assumption lives in `backend/app/config/assumptions.yaml`** with a short justification, so the KPIs recalculate when an assumption changes. Current assumptions:
+   - solar value is in W/m²
+   - trees cut solar by 50%
+   - an oasis cools within 25 m and cuts solar by 30%
+   - a station canopy cuts solar by 50%
+   - "comfortable" means UTCI < 32 °C
+   - riders come back in proportion to how much of the UTCI gap to the cool benchmark trails (TRM-03/TRM-07) is closed
+6. **All KPI numbers come from code**, recalculated live from the accepted fixes, never hard-coded:
+   - comfortable km
+   - °C reduction
+   - riders recovered
+   - tCO₂e
+   - € per km
+   - € per new summer cyclist
+   - € saved per user
+7. **Credit generative AI tools and open-source licences** (a hackathon rule). Keep a work log of who did what.
+
+# Prototype architecture
+
+- `scripts/build_dataset.py` turns `../Data` into `backend/app/data/*.json`: trail pieces, junctions, stations, fountains, catalogue and `build_report.json`. Re-run it when the data or `scripts/trail_mapping.yaml` changes.
+- The backend keeps all domain logic in memory: `services/{dataset,effect_service,metric_service,kpi_service,planner_service}.py`. **The API is stateless**: the client sends the list of accepted fixes and the server recomputes from the baseline, so undo is just dropping the last item. PostGIS is only used by `/api/health` for now.
+- Endpoints:
+  - `GET /api/map-data`
+  - `POST /api/evaluate`
+  - `POST /api/recommend`
+- Tests: `cd backend && pip install -r requirements-dev.txt && python -m pytest`.

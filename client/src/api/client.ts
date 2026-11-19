@@ -1,47 +1,40 @@
-import { useEffect, useState } from 'react'
-
 // Requests go to /api/* and Vite proxies them to the backend (see vite.config.ts),
 // so there is no CORS setup or backend URL to configure in the browser.
 const API_BASE = '/api'
 
-export type Place = {
-  id: number
-  name: string
-  city: string
-  category: string
-  latitude: number
-  longitude: number
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
 }
 
-export type Health = {
-  status: 'ok' | 'degraded' | 'error'
-  database: boolean
-  postgis: string | null
-}
-
-export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { signal })
+async function handle<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
+    let message = `${response.status} ${response.statusText}`
+    try {
+      const body = (await response.json()) as { detail?: unknown }
+      if (typeof body.detail === 'string') message = body.detail
+    } catch {
+      /* keep the status text */
+    }
+    throw new ApiError(response.status, message)
   }
   return response.json() as Promise<T>
 }
 
-type ApiState<T> = { data?: T; error?: Error; loading: boolean }
+export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return handle<T>(await fetch(`${API_BASE}${path}`, { signal }))
+}
 
-/** Minimal GET hook. Swap for TanStack Query if you need caching/mutations. */
-export function useApi<T>(path: string): ApiState<T> {
-  const [state, setState] = useState<ApiState<T>>({ loading: true })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    apiGet<T>(path, controller.signal)
-      .then((data) => setState({ data, loading: false }))
-      .catch((error: Error) => {
-        if (!controller.signal.aborted) setState({ error, loading: false })
-      })
-    return () => controller.abort()
-  }, [path])
-
-  return state
+export async function apiPost<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+  return handle<T>(
+    await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }),
+  )
 }

@@ -1,0 +1,123 @@
+# Every number the model uses that is NOT read from a dataset lives here.
+# source: "catalogue" (VAS-R1 interventions CSV), "VAS-R1 data", "standard" (published reference)
+# or "team assumption" (our choice; stated openly in the UI).
+- key: water_ok_m
+  label: Water within a short detour
+  value: 100
+  unit: m
+  source: team assumption
+  note: A fountain or oasis within 100 m of the trail counts as reachable (matches the 100 m fountain buffers).
+- key: water_bad_m
+  label: Water too far
+  value: 300
+  unit: m
+  source: team assumption
+  note: At 300 m or more the water score is 1 (worst). Linear in between.
+- key: utci_ok_c
+  label: UTCI with no heat stress
+  value: 26
+  unit: °C
+  source: standard
+  note: Upper bound of the UTCI "no thermal stress" band; temperature score 0.
+- key: utci_bad_c
+  label: UTCI very strong heat stress
+  value: 46
+  unit: °C
+  source: standard
+  note: Upper bound of the UTCI "very strong heat stress" band; temperature score 1.
+- key: comfortable_utci_c
+  label: Comfortable cycling threshold
+  value: 32
+  unit: °C
+  source: standard
+  note: UTCI above 32 °C is "strong heat stress"; a trail point below it counts as climate-comfortable.
+- key: solar_unit
+  label: Unit of the solar value
+  value: W/m²
+  unit: ""
+  source: team assumption
+  note: The solar raster screen is labelled "working measure, no units"; we treat it as W/m².
+- key: junction_wait_ref_s
+  label: Reference red-light wait
+  value: 70
+  unit: s
+  source: team assumption
+  note: A wait of 70 s in full sun gives a wait-exposure of 1 (longest wait in the data is 68 s).
+- key: point_weight_m
+  label: Weight of a junction or station
+  value: 100
+  unit: m
+  source: team assumption
+  note: Junctions and stations have no length; they count like 100 m of trail when ranking.
+- key: trees_solar_cut
+  label: Sun blocked by trees (INT-01)
+  value: 0.5
+  unit: share
+  source: team assumption
+  note: The catalogue gives °C but not shade; mature tree alignment assumed to halve solar exposure.
+- key: oasis_solar_cut
+  label: Sun blocked by an oasis pergola (INT-03)
+  value: 0.3
+  unit: share
+  source: team assumption
+  note: Pergola covers part of the surroundings only.
+- key: oasis_radius_m
+  label: Reach of an oasis' cooling
+  value: 25
+  unit: m
+  source: team assumption
+  note: Trail points within 25 m of an oasis get its UTCI and sun reduction.
+- key: canopy_solar_cut
+  label: Sun blocked by a station canopy (INT-06)
+  value: 0.5
+  unit: share
+  source: team assumption
+  note: Solar canopy over the docks.
+- key: green_wave_wait_s
+  label: Wait after green-wave priority (INT-05)
+  value: 15
+  unit: s
+  source: catalogue
+  note: Catalogue note "cuts cyclist waiting time in the sun from 65 s to <15 s".
+- key: linear_fix_unit_m
+  label: Pricing unit of trees and cool pavement
+  value: 100
+  unit: m
+  source: catalogue
+  note: INT-01 and INT-04 are priced per 100 linear metres; cost is pro-rata to the point's length.
+- key: summer_days
+  label: Summer days per year
+  value: 122
+  unit: days
+  source: team assumption
+  note: June to September.
+- key: trips_per_cyclist_day
+  label: Trips per cyclist per day
+  value: 2
+  unit: trips
+  source: team assumption
+  note: A return trip.
+- key: avg_trip_km
+  label: Average bike trip
+  value: 3.8
+  unit: km
+  source: catalogue
+  note: INT-08 modal-shift reference "replaced trip (3.8 km avg)".
+- key: co2_per_trip_kg
+  label: CO₂ avoided per car trip replaced
+  value: 0.72
+  unit: kg CO₂e
+  source: catalogue
+  note: INT-08 modal-shift reference.
+- key: eur_per_trip
+  label: Money saved per car trip replaced
+  value: 1.15
+  unit: €
+  source: catalogue
+  note: INT-08 modal-shift reference.
+- key: cool_benchmark_trails
+  label: Cool benchmark trails
+  value: [TRM-03, TRM-07]
+  unit: ""
+  source: VAS-R1 data
+  note: Lowest UTCI and lowest summer ridership drop; a trail cooled to their mean UTCI is assumed to recover its whole summer drop, proportionally in between.
