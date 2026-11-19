@@ -49,6 +49,10 @@ export default function Legend({ metric, filtered = false }: Props) {
           Park
         </li>
         <li className="flex items-center gap-2">
+          <span className="h-2.5 w-3 rounded-[2px] bg-park/30" aria-hidden />{" "}
+          Short detour to shade
+        </li>
+        <li className="flex items-center gap-2">
           <span
             className="grid size-3 place-items-center rounded-[3px] border border-white bg-bike-parking text-[8px] font-bold leading-none text-white shadow"
             aria-hidden

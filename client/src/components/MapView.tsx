@@ -119,6 +119,53 @@ const bikeParkingIcon = L.divIcon({
   iconAnchor: [BIKE_PARKING_PX / 2, BIKE_PARKING_PX / 2],
 });
 
+/** Tint of the shade reach area around parks and oases (applied once to the whole pane, like the water reach). */
+const SHADE_REACH_OPACITY = 0.3;
+/**
+ * Reach drawn around a park: a park is a large shaded area worth a longer detour than an oasis pergola (which keeps
+ * the water_ok_m "short detour"). Display only, it never changes a score or KPI, so it is not in assumptions.yaml.
+ */
+const PARK_SHADE_REACH_M = 150;
+
+/** Metres per screen pixel at a zoom level and latitude (Web Mercator, 256 px tiles). */
+function metresPerPixel(zoom: number, lat: number): number {
+  return (40075016.686 * Math.cos((lat * Math.PI) / 180)) / 2 ** (zoom + 8);
+}
+
+/**
+ * Area within `radius` metres of a park: each park drawn filled, with a round-joined stroke 2 × radius wide, which
+ * together cover exactly the park grown by the radius (a buffer). Leaflet strokes are in pixels, so the width is
+ * recomputed on every zoom. Display only: parks never change a score.
+ */
+function ParkReach({
+  parks,
+  radius,
+  color,
+}: {
+  parks: MapData["parks"];
+  radius: number;
+  color: string;
+}) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvent("zoomend", () => setZoom(map.getZoom()));
+  // noClip: Leaflet clips paths just outside the view, and the wide stroke would then also run along the clip edge.
+  const style = useMemo<L.PolylineOptions>(
+    () => ({
+      noClip: true,
+      color,
+      weight: (2 * radius) / metresPerPixel(zoom, map.getCenter().lat),
+      opacity: 1,
+      lineJoin: "round",
+      lineCap: "round",
+      fillColor: color,
+      fillOpacity: 1,
+    }),
+    [color, radius, zoom, map],
+  );
+  return <GeoJSON data={parks} style={style} interactive={false} />;
+}
+
 type ParkProps = MapData["parks"]["features"][number]["properties"];
 
 /** Park tooltip as a DOM node, so an OSM name is shown as text, never parsed as HTML. */
@@ -563,7 +610,7 @@ export default function MapView({
   const [showPlan, setShowPlan] = useState(true);
   const [showContext, setShowContext] = useState(false);
   const [showFountains, setShowFountains] = useState(false);
-  const [showParks, setShowParks] = useState(false);
+  const [showShade, setShowShade] = useState(false);
   const [showBikeParking, setShowBikeParking] = useState(false);
 
   const results = useMemo(
@@ -592,6 +639,10 @@ export default function MapView({
   // the water score is 1; inside it the score falls to 0 within water_ok_m.
   const waterReach = Number(
     mapData.assumptions.find((a) => a.key === "water_bad_m")?.value ?? 0,
+  );
+  // Reach drawn around oases (shade to rest in): the same "short detour" as for water. Parks: PARK_SHADE_REACH_M.
+  const shadeReach = Number(
+    mapData.assumptions.find((a) => a.key === "water_ok_m")?.value ?? 0,
   );
 
   const fixesByPoint = useMemo(() => {
@@ -681,9 +732,59 @@ export default function MapView({
           )}
         </Pane>
 
+        {/* Shade reach under the parks: drawn opaque and the pane faded as a whole, so overlapping parks and oases
+            merge into one evenly tinted area. */}
+        <Pane
+          name="shade-reach"
+          style={{ zIndex: 384, opacity: SHADE_REACH_OPACITY }}
+        >
+          {showShade && shadeReach > 0 && (
+            <>
+              <ParkReach
+                parks={mapData.parks}
+                radius={PARK_SHADE_REACH_M}
+                color={park}
+              />
+              {evaluation?.oases.map((o) => (
+                <Circle
+                  key={`shade-${o.point_id}`}
+                  center={o.wgs}
+                  radius={shadeReach}
+                  interactive={false}
+                  pathOptions={{
+                    stroke: false,
+                    fillColor: park,
+                    fillOpacity: 1,
+                  }}
+                />
+              ))}
+            </>
+          )}
+        </Pane>
+
         {/* Parks under the reach tint and the trails, so they never take a click meant for a trail piece. */}
         <Pane name="parks" style={{ zIndex: 385 }}>
-          {showParks && (
+          {showShade &&
+            evaluation?.oases.map((o) => (
+              <Circle
+                key={`shade-outline-${o.point_id}`}
+                center={o.wgs}
+                radius={shadeReach}
+                pathOptions={{
+                  color: park,
+                  weight: 1.5,
+                  dashArray: "4 4",
+                  fill: false,
+                }}
+              >
+                <Tooltip className="cc-tooltip" sticky>
+                  <strong>Cyclist Oasis · in your plan</strong>
+                  <br />
+                  Shade within {metres(shadeReach)}
+                </Tooltip>
+              </Circle>
+            ))}
+          {showShade && (
             <GeoJSON
               data={mapData.parks}
               style={{
@@ -976,14 +1077,14 @@ export default function MapView({
             set: setShowPlan,
           },
           {
+            label: `Shade spots (parks and oases)`,
+            checked: showShade,
+            set: setShowShade,
+          },
+          {
             label: "Drinking fountains",
             checked: showFountains,
             set: setShowFountains,
-          },
-          {
-            label: "Parks",
-            checked: showParks,
-            set: setShowParks,
           },
           {
             label: "Bicibox bike parkings ",
