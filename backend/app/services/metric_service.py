@@ -55,8 +55,8 @@ def weight_m(ds: Dataset, p: MapPoint) -> float:
 
 
 def priority(ds: Dataset, p: MapPoint, score: float) -> float:
-    """score x spring riders of the trail x (length or point weight) / 100 m."""
-    return score * ds.trails[p.trail_id].riders_spring * weight_m(ds, p) / 100
+    """score x (length or point weight) / 100 m."""
+    return score * weight_m(ds, p) / 100
 
 
 def score_all(ds: Dataset, state: dict[str, PointState]) -> dict[str, Scores]:

@@ -15,7 +15,7 @@ from app.services.effect_service import (
     validate_plan,
 )
 from app.services.kpi_service import compute_kpis
-from app.services.metric_service import METRICS, priority, score_all, total_priority, wait_exposure
+from app.services.metric_service import METRICS, Scores, priority, score_all, total_priority, wait_exposure
 
 WORST_N = 10
 
@@ -32,14 +32,34 @@ def _raw(ds: Dataset, p: MapPoint, s: PointState) -> dict:
     return raw
 
 
+def _local_impacts(ds: Dataset, current: PointState, proposed: PointState, before: Scores, after: Scores) -> list[dict]:
+    measurements = {
+        "water": (current.water_dist_m, proposed.water_dist_m, "m"),
+        "sun": (current.solar, proposed.solar, str(ds.assumptions["solar_unit"])),
+        "heat": (current.utci, proposed.utci, "°C"),
+    }
+    if round(current.solar, 1) == round(proposed.solar, 1):
+        measurements["sun"] = (100 * wait_exposure(ds, current), 100 * wait_exposure(ds, proposed), "%")
+
+    impacts = []
+    for metric in METRICS:
+        before_score, after_score = round(before.get(metric), 4), round(after.get(metric), 4)
+        impact: dict[str, object] = {"metric": metric, "before": before_score, "after": after_score}
+        if metric in measurements:
+            before_value, after_value, unit = measurements[metric]
+            before_value, after_value = round(before_value, 1), round(after_value, 1)
+            if before_value != after_value:
+                impact["measurement"] = {"before": before_value, "after": after_value, "unit": unit}
+        if before_score != after_score or "measurement" in impact:
+            impacts.append(impact)
+    return impacts
+
+
 def static_map_data(ds: Dataset) -> dict:
     a = ds.assumptions
     return {
         "trails": [t.raw for t in ds.trails.values()],
-        "points": [
-            {k: v for k, v in p.raw.items() if k not in ("utm", "mid_utm")} | {"riders_spring": ds.trails[p.trail_id].riders_spring}
-            for p in ds.points
-        ],
+        "points": [{k: v for k, v in p.raw.items() if k not in ("utm", "mid_utm")} for p in ds.points],
         "fountains": [{"id": f["id"], "location": f["location"], "wgs": f["wgs"]} for f in ds.fountains],
         "context_network": ds.context_network,
         "catalogue": [
@@ -149,7 +169,8 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
                  "effects": effect_summary(ds, fix_id)}
             )
             continue
-        new_scores = score_all(ds, apply_fix(ds, state, fix_id, point))
+        new_state = apply_fix(ds, state, fix_id, point)
+        new_scores = score_all(ds, new_state)
         new_burden = total_priority(ds, new_scores, metric)
         reduction = burden - new_burden
         improves = reduction > 1e-6
@@ -167,6 +188,7 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
                 "effects": effect_summary(ds, fix_id),
                 "local_before": round(local_before, 4),
                 "local_after": round(new_scores[point_id].get(metric), 4),
+                "local_impacts": _local_impacts(ds, state[point_id], new_state[point_id], scores[point_id], new_scores[point_id]),
                 "network_reduction_pct": reduction_pct,
                 "value_pct_per_10k": reduction_pct / priced.cost_eur * 10_000 if priced.cost_eur > 0 else None,
             }

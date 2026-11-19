@@ -14,9 +14,6 @@ export type Trail = {
   utci_2pm_c: number
   surface_temp_c: number
   shade_2pm_pct: number
-  riders_spring: number
-  riders_summer: number
-  summer_drop_pct: number
   nearest_shelter_id: string
   nearest_shelter_name: string | null
   risk_level: string
@@ -32,7 +29,6 @@ export type MapPointInfo = {
   wgs: LatLng[]
   mid_wgs: LatLng
   fountain_dist_m: number
-  riders_spring: number
   cycle_class?: string
   name?: string
   notes?: string
@@ -107,17 +103,10 @@ export type Kpis = {
   utci_drop_avg_c: number | null
   utci_drop_max_c: number | null
   points_cooled: number
-  recovered_trips_per_day: number
-  new_summer_cyclists: number
   co2_t_per_year: number
-  co2_from_trips_t: number
-  co2_from_sequestration_t: number
   capex_eur: number
   opex_eur_per_year: number
   eur_per_comfortable_km: number | null
-  eur_per_new_cyclist: number | null
-  eur_saved_per_cyclist_year: number
-  eur_saved_total_year: number
 }
 
 export type AcceptedFix = { fix_id: string; point_id: string }
@@ -135,6 +124,13 @@ export type Evaluation = {
 
 export type OptionStatus = 'available' | 'over_budget' | 'no_effect' | 'applied'
 
+export type FixImpact = {
+  metric: MetricId
+  before: number
+  after: number
+  measurement?: { before: number; after: number; unit: string }
+}
+
 export type FixOption = {
   fix_id: string
   label: string
@@ -146,6 +142,7 @@ export type FixOption = {
   deployment_weeks?: number
   local_before?: number
   local_after?: number
+  local_impacts?: FixImpact[]
   network_reduction_pct?: number
   value_pct_per_10k?: number | null
 }

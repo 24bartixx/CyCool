@@ -27,4 +27,7 @@ export function cssVar(token: string): string {
   return value
 }
 
-export const scoreColor = (score: number) => cssVar(SCORE_CLASSES[scoreClassIndex(score)].token)
+// Vite hot-swaps theme/colors.css without a reload: forget the cached values so the next render reads the new ones.
+if (import.meta.hot) import.meta.hot.on('vite:afterUpdate', () => cache.clear())
+
+export const scoreColor =(score: number) => cssVar(SCORE_CLASSES[scoreClassIndex(score)].token)

@@ -45,4 +45,9 @@
   --color-water: #2a78d6;
   --color-water-soft: #dbe9fa;
   --color-network: #b9b6ac;
+
+  /* Map selection halo: a strong blue, far from the orange score ramp and dark enough for the grey-white basemap
+     (black read as a thicker line next to the dark scores, white vanished on the basemap). Deeper than
+     --color-water so a selected line doesn't read as a water feature. */
+  --color-selection: #1d4ed8;
 }

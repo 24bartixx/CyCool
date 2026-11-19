@@ -45,17 +45,6 @@ class Trail:
     def utci(self) -> float:
         return float(self.raw["utci_2pm_c"])
 
-    @property
-    def riders_spring(self) -> int:
-        return int(self.raw["riders_spring"])
-
-    @property
-    def riders_summer(self) -> int:
-        return int(self.raw["riders_summer"])
-
-    @property
-    def synthetic_length_km(self) -> float:
-        return float(self.raw["synthetic_length_m"]) / 1000
 
 
 @dataclass(frozen=True)

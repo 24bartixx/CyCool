@@ -16,7 +16,7 @@ type Props = {
 export default function PlanList({ plan, pointsById, onUndo, onReset, onSelect, busy }: Props) {
   return (
     <section aria-labelledby="plan-h" className="space-y-2.5">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h2 id="plan-h" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
           <span className="grid size-5 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground">4</span>
           Your plan ({plan.length})

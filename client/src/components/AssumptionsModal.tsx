@@ -49,7 +49,7 @@ export default function AssumptionsModal({ open, onClose, data }: { open: boolea
               {data.fountains.length} drinking fountains (cemetery fountains excluded).
             </li>
             <li>
-              <strong className="text-foreground">Synthetic VAS-R1 data:</strong> UTCI heat stress, riders, junctions, bike stations and the fix catalogue. Never read
+              <strong className="text-foreground">Synthetic VAS-R1 data:</strong> UTCI heat stress, junctions, bike stations and the fix catalogue. Never read
               them as measured Viladecans values.
             </li>
             <li>
@@ -119,7 +119,7 @@ export default function AssumptionsModal({ open, onClose, data }: { open: boolea
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-muted">Not used: INT-07 (city-wide app, no location) and INT-08 (only its CO₂ and € per replaced trip feed the KPIs).</p>
+          <p className="mt-2 text-xs text-muted">Not used: INT-07 (city-wide app, no location) and INT-08 (modal-shift factors per replaced trip; we have no ridership data to apply them to).</p>
         </section>
       </div>
     </dialog>

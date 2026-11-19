@@ -117,18 +117,18 @@ def test_greedy_loop_never_increases_burden_or_overspends(metric):
 
 def test_kpis_without_plan_have_no_ratios():
     k = evaluate(ds, "heat", 50_000, [])["kpis"]
-    assert k["eur_per_comfortable_km"] is None and k["eur_per_new_cyclist"] is None
+    assert k["eur_per_comfortable_km"] is None
     assert k["utci_drop_avg_c"] is None and k["capex_eur"] == 0
 
 
-def test_cooling_a_hot_trail_recovers_riders_and_comfort():
+def test_cooling_a_hot_trail_makes_it_comfortable():
     trail = "TRM-05"  # UTCI 37.2 °C, minus trees 4.5 and cool pavement 1.8 = 30.9 < 32
     segs = [p.id for p in ds.points if p.kind == "segment" and p.trail_id == trail]
     accepted = [("INT-01", s) for s in segs] + [("INT-04", s) for s in segs]
     k = evaluate(ds, "heat", 1e7, accepted)["kpis"]
     real_km = ds.trails[trail].raw["real_length_m"] / 1000
     assert math.isclose(k["comfortable_km_gain"], real_km, abs_tol=1e-3)  # real_length_m is rounded to 0.1 m
-    assert k["recovered_trips_per_day"] > 0 and k["eur_per_new_cyclist"] is not None
+    assert k["eur_per_comfortable_km"] is not None
 
 
 def test_api_endpoints():
@@ -140,3 +140,28 @@ def test_api_endpoints():
     )
     assert bad.status_code == 422 and "budget" in bad.json()["detail"]
     assert client.post("/api/evaluate", json={"metric": "wind", "budget": 1}).status_code == 422
+
+
+def test_recommendation_reports_impacts_outside_the_selected_metric():
+    target = max((p for p in ds.points if p.kind == "segment"), key=lambda p: p.fountain_dist_m)
+    response = client.post(
+        "/api/recommend", json={"metric": "water", "budget": 100_000, "accepted": [], "point_id": target.id}
+    )
+    assert response.status_code == 200
+    options = {o["fix_id"]: o for o in response.json()["options"]}
+    oasis = options["INT-03"]
+    assert oasis["status"] == "available"
+    impacts = {i["metric"]: i for i in oasis["local_impacts"]}
+    assert set(impacts) == {"water", "sun", "heat", "combined"}
+    assert all(i["before"] > i["after"] for i in impacts.values())
+    assert (impacts["water"]["before"], impacts["water"]["after"]) == (oasis["local_before"], oasis["local_after"])
+    assert {i["metric"] for i in options["INT-04"]["local_impacts"]} == {"heat", "combined"}
+
+
+def test_recommendation_reports_measurement_when_score_is_already_zero():
+    target = next(p for p in ds.points if p.kind == "segment" and 10 < p.fountain_dist_m < A["water_ok_m"])
+    options = recommend(ds, "combined", 100_000, [], target.id)["options"]
+    oasis = next(o for o in options if o["fix_id"] == "INT-03")
+    water = next(i for i in oasis["local_impacts"] if i["metric"] == "water")
+    assert water["before"] == water["after"] == 0
+    assert water["measurement"] == {"before": round(target.fountain_dist_m, 1), "after": 0.0, "unit": "m"}

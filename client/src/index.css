@@ -92,6 +92,51 @@
   line-height: 1.35;
 }
 
+/* point details as a popup above the selected point (wide screens; see PointPopup in MapView) */
+.cc-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+  color: var(--color-foreground);
+  box-shadow:
+    0 12px 32px rgb(15 23 42 / 0.18),
+    0 2px 6px rgb(15 23 42 / 0.08);
+}
+.cc-popup .leaflet-popup-content {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+/* Leaflet spaces out popup paragraphs and, unlayered, would beat Tailwind; hand them back to Tailwind's layers */
+.cc-popup .leaflet-popup-content p {
+  margin: revert-layer;
+}
+.cc-popup .leaflet-popup-tip {
+  border: 1px solid var(--color-border);
+  box-shadow: none;
+}
+/* React empties the old popup when the selection changes, so drop Leaflet's fade-out and pop the new one in */
+.leaflet-fade-anim .leaflet-popup.cc-popup {
+  transition: none;
+}
+.cc-popup .leaflet-popup-content-wrapper,
+.cc-popup .leaflet-popup-tip-container {
+  animation: cc-pop-in 160ms ease-out;
+}
+@keyframes cc-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-popup .leaflet-popup-content-wrapper,
+  .cc-popup .leaflet-popup-tip-container {
+    animation: none;
+  }
+}
+
 /* skeleton shimmer for loading states */
 .cc-skeleton {
   background: linear-gradient(90deg, #ecebe6 25%, #f6f5f1 50%, #ecebe6 75%);

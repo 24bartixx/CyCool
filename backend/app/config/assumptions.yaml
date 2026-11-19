@@ -85,39 +85,3 @@
   unit: m
   source: catalogue
   note: INT-01 and INT-04 are priced per 100 linear metres; cost is pro-rata to the point's length.
-- key: summer_days
-  label: Summer days per year
-  value: 122
-  unit: days
-  source: team assumption
-  note: June to September.
-- key: trips_per_cyclist_day
-  label: Trips per cyclist per day
-  value: 2
-  unit: trips
-  source: team assumption
-  note: A return trip.
-- key: avg_trip_km
-  label: Average bike trip
-  value: 3.8
-  unit: km
-  source: catalogue
-  note: INT-08 modal-shift reference "replaced trip (3.8 km avg)".
-- key: co2_per_trip_kg
-  label: CO₂ avoided per car trip replaced
-  value: 0.72
-  unit: kg CO₂e
-  source: catalogue
-  note: INT-08 modal-shift reference.
-- key: eur_per_trip
-  label: Money saved per car trip replaced
-  value: 1.15
-  unit: €
-  source: catalogue
-  note: INT-08 modal-shift reference.
-- key: cool_benchmark_trails
-  label: Cool benchmark trails
-  value: [TRM-03, TRM-07]
-  unit: ""
-  source: VAS-R1 data
-  note: Lowest UTCI and lowest summer ridership drop; a trail cooled to their mean UTCI is assumed to recover its whole summer drop, proportionally in between.

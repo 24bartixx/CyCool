@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react'
 import type { Kpis } from '../api/planner.ts'
-import { celsius, dec1, dec2, eur, int, km } from '../lib/format.ts'
+import { celsius, dec1, dec2, eur, km } from '../lib/format.ts'
 
 type Tile = { label: string; value: string; sub?: string; formula: string; emphasis?: boolean }
 
@@ -12,7 +12,7 @@ function tiles(k: Kpis, burdenPct: number | null, metricLabel: string): Tile[] {
       label: `${metricLabel} burden`,
       value: burdenPct == null ? '—' : burdenPct < 0.05 ? '0 %' : `−${dec1(burdenPct)} %`,
       sub: 'vs today, whole trail network',
-      formula: 'Reduction of Σ (score × spring riders × length) over all trail points for the selected metric.',
+      formula: 'Reduction of Σ (score × length) over all trail points for the selected metric.',
       emphasis: true,
     },
     {
@@ -34,29 +34,16 @@ function tiles(k: Kpis, burdenPct: number | null, metricLabel: string): Tile[] {
       formula: 'Average and maximum UTCI reduction over all points whose UTCI went down.',
     },
     {
-      label: 'New summer cyclists',
-      value: int(k.new_summer_cyclists),
-      sub: `${int(k.recovered_trips_per_day)} trips/day won back`,
-      formula:
-        'Per trail: summer ridership drop × share of the UTCI gap to the cool benchmark trails closed. Rider-km ÷ average trip length = trips; trips ÷ trips per cyclist = cyclists.',
-    },
-    {
       label: 'CO₂ avoided',
       value: `${dec2(k.co2_t_per_year)} t/yr`,
-      sub: `${dec2(k.co2_from_trips_t)} t trips · ${dec2(k.co2_from_sequestration_t)} t trees & canopies`,
-      formula: 'Trips × CO₂ per replaced car trip × summer days, plus catalogue CO₂ sequestration/avoidance of the fixes.',
+      sub: 'trees & solar canopies',
+      formula: 'Catalogue CO₂ sequestration/avoidance of the accepted fixes.',
     },
     {
       label: '€ per comfortable km',
       value: eur(k.eur_per_comfortable_km),
       sub: `plan ${eur(k.capex_eur)} + ${eur(k.opex_eur_per_year)}/yr upkeep`,
       formula: 'Plan CAPEX ÷ km that became comfortable. "—" until at least one km gains comfort.',
-    },
-    {
-      label: '€ per new cyclist',
-      value: eur(k.eur_per_new_cyclist),
-      sub: `each saves ${eur(k.eur_saved_per_cyclist_year)}/yr`,
-      formula: 'Plan CAPEX ÷ new summer cyclists. Savings: trips per day × € per replaced trip × summer days.',
     },
   ]
 }
@@ -78,7 +65,7 @@ export default function KpiStrip({ kpis, burdenPct, metricLabel }: { kpis?: Kpis
                 {t.sub && <p className="truncate text-[11px] text-muted" title={t.sub}>{t.sub}</p>}
               </li>
             ))
-          : Array.from({ length: 8 }, (_, i) => (
+          : Array.from({ length: 6 }, (_, i) => (
               <li key={i} className="min-w-[150px] flex-1 bg-surface px-3 py-2.5">
                 <div className="cc-skeleton h-3 w-20" />
                 <div className="cc-skeleton mt-2 h-5 w-16" />

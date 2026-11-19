@@ -10,7 +10,7 @@ The planner enters a **budget** and picks a **metric**. The map shows the **wors
 - **Temperature**: synthetic UTCI at 14 h per trail, plus the local temperature anomaly at junctions.
 - **Combined**: the mean of the three, with equal weights.
 
-**Worst = metric × spring riders × segment length / 100 m.** Busy streets come first.
+**Worst = metric × segment length / 100 m** (junctions and stations count as 100 m). There is no ridership data (cyclists per day), so it is not used anywhere.
 
 ## Fixes (catalogue INT-01 to INT-06 only)
 | ID | Fix | Where |
@@ -24,7 +24,7 @@ The planner enters a **budget** and picks a **metric**. The map shows the **wors
 
 Not used:
 - INT-07 (app) is city-wide and has no location.
-- INT-08 is only the KPI factors: 0.72 kg CO₂e and €1.15 per replaced trip.
+- INT-08 (modal-shift factors per replaced trip) needs ridership data, which we don't have.
 - There is no standalone drinking fountain.
 
 # Rules
@@ -40,7 +40,7 @@ Not used:
    - the 5 CRU traffic-light junctions and the 2 bike stations (EST-B01/B02), snapped onto their own trail and labelled as approximate locations, because their synthetic coordinates are 140–850 m off
 3. **Data sources:**
    - **Real (municipal):** segment geometry, length, solar value, fountain locations (`Data/bike_solar_screen_geojson.geojson`, EPSG:25831). Cemetery fountains are excluded.
-   - **Synthetic (VAS-R1):** temperature/UTCI, riders, junctions, shelters, catalogue costs and effects.
+   - **Synthetic (VAS-R1):** temperature/UTCI, junctions, shelters, catalogue costs and effects.
 4. **The VAS-R1 dataset is synthetic.** Never present it as real Viladecans data, and show a "synthetic/demo data" label in the UI.
 5. **Every assumption lives in `backend/app/config/assumptions.yaml`** with a short justification, so the KPIs recalculate when an assumption changes. Current assumptions:
    - solar value is in W/m²
@@ -48,15 +48,11 @@ Not used:
    - an oasis cools within 25 m and cuts solar by 30%
    - a station canopy cuts solar by 50%
    - "comfortable" means UTCI < 32 °C
-   - riders come back in proportion to how much of the UTCI gap to the cool benchmark trails (TRM-03/TRM-07) is closed
 6. **All KPI numbers come from code**, recalculated live from the accepted fixes, never hard-coded:
    - comfortable km
    - °C reduction
-   - riders recovered
-   - tCO₂e
+   - tCO₂e (sequestration/avoidance of the accepted fixes only)
    - € per km
-   - € per new summer cyclist
-   - € saved per user
 7. **Credit generative AI tools and open-source licences** (a hackathon rule). Keep a work log of who did what.
 
 # Prototype architecture

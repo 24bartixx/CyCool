@@ -1,4 +1,4 @@
-import { BookOpen, FlaskConical } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 
 type Props = { onOpenAssumptions: () => void; assumptionsDisabled: boolean }
 
@@ -10,13 +10,6 @@ export default function AppHeader({ onOpenAssumptions, assumptionsDisabled }: Pr
         <p className="font-semibold tracking-tight text-primary">CyCool</p>
         <p className="truncate text-xs text-muted">Heat-comfort planner for Viladecans cycle trails</p>
       </div>
-      <span
-        className="ml-2 hidden items-center gap-1.5 rounded-full border border-warning/30 bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning sm:inline-flex"
-        title="Heat, riders, junctions and the fix catalogue come from the synthetic VAS-R1 dataset. Street geometry, solar values and fountains are real municipal data."
-      >
-        <FlaskConical className="size-3.5" aria-hidden />
-        Synthetic demo data (VAS-R1)
-      </span>
       <button
         type="button"
         onClick={onOpenAssumptions}
