@@ -176,7 +176,7 @@ export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy
         </div>
       )}
       {options && useful.length === 0 && (
-        <p className="rounded-lg border border-dashed border-border-strong p-3 text-xs text-muted">
+        <p className="rounded-lg border border-border p-3 text-xs text-muted">
           No catalogue fix improves {METRIC_SHORT[metric].toLowerCase()} at this point.
           {nextWorstId && ' Try the next worst point.'}
         </p>

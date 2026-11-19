@@ -2,7 +2,6 @@ import { RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import type { PointKind } from '../api/planner.ts'
 import AppHeader from '../components/AppHeader.tsx'
-import AssumptionsModal from '../components/AssumptionsModal.tsx'
 import BudgetPanel from '../components/BudgetPanel.tsx'
 import KpiStrip from '../components/KpiStrip.tsx'
 import MapView from '../components/MapView.tsx'
@@ -39,7 +38,6 @@ function SidebarSkeleton() {
 export default function PlannerPage() {
   const pl = usePlanner()
   const [hoveredId, setHoveredId] = useState<string>()
-  const [assumptionsOpen, setAssumptionsOpen] = useState(false)
   const wide = useMediaQuery(WIDE)
   const data = pl.mapData.data
   const ev = pl.evaluation
@@ -74,6 +72,33 @@ export default function PlannerPage() {
   const solarUnit = String(data?.assumptions.find((a) => a.key === 'solar_unit')?.value ?? '')
   const waterReachM = data?.assumptions.find((a) => a.key === 'water_ok_m')?.value
   const strongHeatC = data?.assumptions.find((a) => a.key === 'strong_heat_utci_c')?.value
+  const comfortC = data?.assumptions.find((a) => a.key === 'comfortable_utci_c')?.value
+
+  // The PDF is built from the evaluation on screen; jsPDF is only loaded on the first export.
+  const [exporting, setExporting] = useState(false)
+  const [exportFailed, setExportFailed] = useState(false)
+  const { pointsById, trailsById } = pl
+  const exportPdf = useCallback(async () => {
+    if (!data || !ev) return
+    setExporting(true)
+    setExportFailed(false)
+    try {
+      const { exportPlanPdf } = await import('../lib/exportPdf.ts')
+      exportPlanPdf({ mapData: data, evaluation: ev, pointsById, trailsById })
+    } catch (e) {
+      console.error('PDF export failed', e)
+      setExportFailed(true)
+    } finally {
+      setExporting(false)
+    }
+  }, [data, ev, pointsById, trailsById])
+  const exportBlockedReason = !data || !ev
+    ? 'Loading the plan…'
+    : pl.evaluating
+      ? 'Updating the plan…'
+      : ev.plan.length === 0
+        ? 'Accept at least one fix to export the plan'
+        : undefined
 
   // These are placed in one of two spots below, depending on the screen width.
   const fixes = data && selected && (
@@ -117,7 +142,7 @@ export default function PlannerPage() {
 
   return (
     <>
-      <AppHeader onOpenAssumptions={() => setAssumptionsOpen(true)} assumptionsDisabled={!data} />
+      <AppHeader onExport={exportPdf} exportBlockedReason={exportBlockedReason} exporting={exporting} exportFailed={exportFailed} />
 
       {pl.mapData.error ? (
         <div className="grid flex-1 place-items-center p-6">
@@ -221,12 +246,11 @@ export default function PlannerPage() {
               fixCount={ev?.plan.length ?? 0}
               waterReachM={typeof waterReachM === 'number' ? waterReachM : undefined}
               strongHeatC={typeof strongHeatC === 'number' ? strongHeatC : undefined}
+              comfortC={typeof comfortC === 'number' ? comfortC : undefined}
             />
           </main>
         </div>
       )}
-
-      {data && <AssumptionsModal open={assumptionsOpen} onClose={() => setAssumptionsOpen(false)} data={data} />}
     </>
   )
 }

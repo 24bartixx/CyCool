@@ -97,6 +97,8 @@ function nodeIcon(
  * water blue. A single droplet, where the Cyclist Oasis fix badge shows several (INT-03 in FIX_ICON).
  */
 const FOUNTAIN_PX = 18;
+/** Tint of the water reach area around fountains and oases (applied once to the whole pane, see the reach pane). */
+const REACH_OPACITY = 0.1;
 const fountainIcon = L.divIcon({
   html: `<div class="cc-marker cc-marker--fountain" style="width:${FOUNTAIN_PX}px;height:${FOUNTAIN_PX}px">${renderToStaticMarkup(
     <Droplet size={10} strokeWidth={2.75} aria-hidden />,
@@ -650,7 +652,9 @@ export default function MapView({
           )}
         </Pane>
 
-        <Pane name="reach" style={{ zIndex: 390 }}>
+        {/* Reach fills are drawn opaque and the pane is faded as a whole, so overlapping circles merge into one
+            evenly tinted area instead of getting darker with every overlap (per-circle fillOpacity would stack). */}
+        <Pane name="reach" style={{ zIndex: 390, opacity: REACH_OPACITY }}>
           {showFountains &&
             mapData.fountains.map((f) => (
               <Circle
@@ -658,11 +662,7 @@ export default function MapView({
                 center={f.wgs}
                 radius={waterReach}
                 interactive={false}
-                pathOptions={{
-                  stroke: false,
-                  fillColor: water,
-                  fillOpacity: 0.1,
-                }}
+                pathOptions={{ stroke: false, fillColor: water, fillOpacity: 1 }}
               />
             ))}
           {showPlan &&
@@ -672,12 +672,24 @@ export default function MapView({
                 center={o.wgs}
                 radius={waterReach}
                 interactive={false}
+                pathOptions={{ stroke: false, fillColor: water, fillOpacity: 1 }}
+              />
+            ))}
+        </Pane>
+        {/* Oasis outlines in a pane of their own so the reach pane's fade doesn't wash them out. */}
+        <Pane name="reach-outline" style={{ zIndex: 391 }}>
+          {showPlan &&
+            evaluation?.oases.map((o) => (
+              <Circle
+                key={`oasis-outline-${o.point_id}`}
+                center={o.wgs}
+                radius={waterReach}
+                interactive={false}
                 pathOptions={{
                   color: water,
                   weight: 1.5,
                   dashArray: "4 4",
-                  fillColor: water,
-                  fillOpacity: 0.08,
+                  fill: false,
                 }}
               />
             ))}

@@ -19,3 +19,4 @@
 - 2026-11-19 — OpenAI Codex added length-weighted average UTCI cooling and the affected trail kilometres to the KPI strip.
 - 2026-11-19 — OpenAI Codex made positive coverage gains more visible with a saturated green badge.
 - 2026-11-19 — Claude Code (Claude Opus 5.5) redesigned the KPI strip with an icon per tile, mini trail-coverage bars (today vs added by the plan), and consistent change indicators.
+- 2026-11-19 — Claude Code (Claude Opus 5.5) replaced the Data & assumptions button with Export PDF: a downloadable plan report (KPI changes, fixes by type, every fix with its place and map link, assumptions), built in the browser with jsPDF and jspdf-autotable (both MIT licence).

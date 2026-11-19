@@ -92,7 +92,7 @@ export default function WorstList({
         </div>
       </div>
       {worst.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong p-3 text-sm text-muted">
+        <p className="rounded-lg border border-border p-3 text-sm text-muted">
           {kinds.size === 0
             ? "Pick at least one point type above to list worst points."
             : "Nothing left to improve for this metric on the selected point types."}

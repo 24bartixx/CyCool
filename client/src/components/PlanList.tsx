@@ -83,7 +83,7 @@ export default function PlanList({
         )}
       </div>
       {plan.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border-strong bg-surface-2 px-5 py-6 text-center">
+        <div className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface-2 px-5 py-6 text-center">
           <span className="mb-1.5 grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
             <MousePointerClick className="size-5" aria-hidden />
           </span>
