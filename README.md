@@ -55,7 +55,7 @@ curl http://localhost:8000/api/health   # {"status":"ok","database":true,"postgi
 | -------- | -------------------------------------------------------- |
 | Client   | http://localhost:5173                                    |
 | API docs | http://localhost:8000/docs                               |
-| API      | http://localhost:8000/api/health, /api/places            |
+| API      | http://localhost:8000/api/map-data, /api/evaluate, /api/recommend |
 | Database | `postgresql://postgres:postgres@localhost:<POSTGRES_PORT>/app` |
 
 ### 4. Seed the database
@@ -147,9 +147,8 @@ backend/app/
   main.py                    FastAPI app, CORS, mounts routers under /api
   core/config.py             settings from env vars
   db/session.py              SQLAlchemy engine + get_db dependency
-  models/                    SQLAlchemy ORM models (GeoAlchemy2), one class per file
-  routers/                   HTTP layer (places = mock endpoint, health = DB/PostGIS check)
-  services/                  business logic (place_service = mock data)
+  routers/                   HTTP layer (planner = map-data/evaluate/recommend, health = DB/PostGIS check)
+  services/                  planner logic (dataset, effects, metrics, KPIs)
   schemas/                   Pydantic request/response models
 backend/alembic/
   env.py                     Alembic setup (uses app settings and models)

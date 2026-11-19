@@ -1,0 +1,16 @@
+# VAS-R1 synthetic trail -> real street names in Data/bike_solar_screen_geojson.geojson
+# (exact `street_name` values). Every network segment on these streets becomes part of the trail.
+# TRM-13 (Agrarian Path) is intentionally absent: no real street can be matched without guessing.
+TRM-01: ["Avinguda de la Generalitat"]
+TRM-02: ["Carretera de Barcelona (C-245)"]
+TRM-03: ["Passeig de la Marina"]            # Parc de la Marina is classed "NO" (not a cycle lane)
+TRM-04: ["Carrer del Doctor Reig"]
+TRM-05: ["Avinguda de Gavà"]
+TRM-06: ["Avinguda de Josep Tarradellas"]
+TRM-07: ["Parc del Torrent Ballester"]
+TRM-08: ["Avinguda de Can Palmer"]
+TRM-09: ["Avinguda de la Roureda", "camí de la Roureda"]
+TRM-10: ["Carretera de la Vila"]
+TRM-11: ["Carrer del Sol"]
+TRM-12: ["Avinguda d’Olof Palme"]
+TRM-14: ["Avinguda de la Fraternitat"]

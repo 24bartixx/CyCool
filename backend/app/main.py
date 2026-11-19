@@ -2,9 +2,9 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import health, places
+from app.routers import health, planner
 
-app = FastAPI(title="Hackathon API")
+app = FastAPI(title="CyCool API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,6 +17,6 @@ app.add_middleware(
 # All endpoints live under /api (the client's dev server proxies /api here).
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
-api_router.include_router(places.router)
+api_router.include_router(planner.router)
 
 app.include_router(api_router)

@@ -9,7 +9,7 @@ export default function NotFoundPage() {
         to="/"
         className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
       >
-        Back home
+        Back to the planner
       </Link>
     </div>
   )

@@ -1,0 +1,63 @@
+{
+  "trails": 13,
+  "segment_points": 254,
+  "junction_points": 5,
+  "station_points": 2,
+  "trail_km_real": 10.5,
+  "km_per_trail": {
+    "TRM-01": 1.373,
+    "TRM-02": 1.377,
+    "TRM-03": 0.49,
+    "TRM-04": 0.854,
+    "TRM-05": 1.127,
+    "TRM-06": 0.923,
+    "TRM-07": 0.302,
+    "TRM-08": 0.378,
+    "TRM-09": 0.248,
+    "TRM-10": 0.707,
+    "TRM-11": 0.561,
+    "TRM-12": 0.38,
+    "TRM-14": 1.781
+  },
+  "excluded_planned_segments": 3,
+  "fountains_used": 116,
+  "fountains_excluded_cemetery": 13,
+  "context_segments": 887,
+  "snaps": [
+    {
+      "id": "CRU-01",
+      "trail_id": "TRM-01",
+      "snap_distance_m": 761.5
+    },
+    {
+      "id": "CRU-02",
+      "trail_id": "TRM-12",
+      "snap_distance_m": 140.4
+    },
+    {
+      "id": "CRU-03",
+      "trail_id": "TRM-10",
+      "snap_distance_m": 498.6
+    },
+    {
+      "id": "CRU-04",
+      "trail_id": "TRM-02",
+      "snap_distance_m": 460.0
+    },
+    {
+      "id": "CRU-05",
+      "trail_id": "TRM-06",
+      "snap_distance_m": 460.7
+    },
+    {
+      "id": "EST-B01",
+      "trail_id": "TRM-01",
+      "snap_distance_m": 815.1
+    },
+    {
+      "id": "EST-B02",
+      "trail_id": "TRM-06",
+      "snap_distance_m": 442.9
+    }
+  ]
+}
