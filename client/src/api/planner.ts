@@ -32,7 +32,14 @@ export type MapPointInfo = {
   cycle_class?: string
   name?: string
   notes?: string
+  /** Junctions only: how far the synthetic location was moved onto its trail. */
   snap_distance_m?: number
+  /** Stations only: the real AMBici station's address, docks and distance to its (nearest) trail. */
+  address?: string | null
+  bike_racks?: number | null
+  trail_dist_m?: number
+  /** Stations matched to a VAS-R1 station (EST-B01/B02), whose synthetic heat data they carry. */
+  vas_id?: string
   wait_s?: number
   shade_pct?: number
   temp_anomaly_c?: number

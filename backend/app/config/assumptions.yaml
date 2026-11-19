@@ -55,6 +55,18 @@
   unit: m
   source: team assumption
   note: Junctions and stations have no length; they count like 100 m of trail when ranking.
+- key: station_heat_from
+  label: Heat and sun at an AMBici station
+  value: nearest trail
+  unit: ""
+  source: team assumption
+  note: The real AMBici stations have no heat data. Each takes the synthetic UTCI of the nearest VAS-R1 trail (also when it lies off the trails) and the real solar value of the nearest street segment.
+- key: vas_station_match
+  label: VAS-R1 stations placed on real AMBici stations
+  value: ["EST-B01 → 34863", "EST-B02 → 34868"]
+  unit: ""
+  source: team assumption
+  note: Matched by name and trail, as their synthetic coordinates are 120–650 m off. "Train Station Hub" is 02. RENFE - Parc de la Marina; "Atrium" on Tarradellas Ave is 09. Torrent Ballester - Atrium. Both keep their synthetic temperature anomaly.
 - key: trees_solar_cut
   label: Sun blocked by trees (INT-01)
   value: 0.5

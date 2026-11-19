@@ -28,7 +28,18 @@ export function pointTitle(p: MapPointInfo): string {
   return p.kind === 'segment' ? p.street : (p.name ?? p.id)
 }
 
+/** A station further than this from every trail is off the trails (it still takes the nearest trail's heat). */
+export const ON_TRAIL_M = 50
+
+export function isOffTrail(p: MapPointInfo): boolean {
+  return p.kind === 'station' && (p.trail_dist_m ?? 0) > ON_TRAIL_M
+}
+
 export function pointSubtitle(p: MapPointInfo, trail?: Trail): string {
+  if (p.kind === 'station') {
+    const where = trail && (isOffTrail(p) ? `${Math.round(p.trail_dist_m ?? 0)} m off ${trail.name}` : trail.name)
+    return [p.address, where].filter(Boolean).join(' · ')
+  }
   const parts = [trail?.name, p.kind === 'segment' ? `segment ${p.id}` : undefined]
   return parts.filter(Boolean).join(' · ')
 }

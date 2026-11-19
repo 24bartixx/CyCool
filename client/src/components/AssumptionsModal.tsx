@@ -23,6 +23,7 @@ export default function AssumptionsModal({ open, onClose, data }: { open: boolea
   }, [open])
 
   const trailKm = data.trails.reduce((s, t) => s + t.real_length_m, 0) / 1000
+  const stationCount = data.points.filter((p) => p.kind === 'station').length
 
   return (
     <dialog
@@ -45,16 +46,17 @@ export default function AssumptionsModal({ open, onClose, data }: { open: boolea
           <h3 className="mb-2 font-semibold">Where the numbers come from</h3>
           <ul className="space-y-1.5 text-muted">
             <li>
-              <strong className="text-foreground">Real municipal data:</strong> street geometry of the cycle network, the solar value of each street segment and{' '}
-              {data.fountains.length} drinking fountains (cemetery fountains excluded).
+              <strong className="text-foreground">Real municipal data:</strong> street geometry of the cycle network, the solar value of each street segment,{' '}
+              {data.fountains.length} drinking fountains (cemetery fountains excluded) and {stationCount} AMBici bike stations.
             </li>
             <li>
-              <strong className="text-foreground">Synthetic VAS-R1 data:</strong> UTCI heat stress, junctions, bike stations and the fix catalogue. Never read
-              them as measured Viladecans values.
+              <strong className="text-foreground">Synthetic VAS-R1 data:</strong> UTCI heat stress, junctions, the extra heat at two bike stations and the fix
+              catalogue. Never read them as measured Viladecans values.
             </li>
             <li>
               <strong className="text-foreground">Scope:</strong> {data.trails.length} VAS-R1 trails mapped onto real streets by name ({trailKm.toFixed(1)} km). The
-              Agrarian Path has no matching street and is left out. Junctions and stations are placed on their own trail (approximate location).
+              Agrarian Path has no matching street and is left out. Junctions are placed on their own trail (approximate location). Bike stations are at their
+              real location, also off the trails, and take the heat of the nearest trail.
             </li>
           </ul>
         </section>

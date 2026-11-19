@@ -36,7 +36,7 @@ import type {
 } from "../api/planner.ts";
 import { dec2, metres } from "../lib/format.ts";
 import { FIX_ICON, METRIC_SHORT } from "../lib/icons.tsx";
-import { pointTitle } from "../lib/points.ts";
+import { isOffTrail, pointTitle } from "../lib/points.ts";
 import { cssVar, scoreColor } from "../lib/scale.ts";
 import Legend from "./Legend.tsx";
 
@@ -760,10 +760,25 @@ export default function MapView({
                 <br />
                 {METRIC_SHORT[metric]} score {r ? dec2(r.scores[metric]) : "…"}
                 <br />
-                <span style={{ color: "var(--color-warning)" }}>
-                  Approximate location (synthetic, moved{" "}
-                  {metres(p.snap_distance_m)})
-                </span>
+                {p.kind === "junction" ? (
+                  <span style={{ color: "var(--color-warning)" }}>
+                    Approximate location (synthetic, moved{" "}
+                    {metres(p.snap_distance_m)})
+                  </span>
+                ) : (
+                  <>
+                    Real AMBici station
+                    {isOffTrail(p) && (
+                      <>
+                        , {metres(p.trail_dist_m)} off the trails
+                        <br />
+                        <span style={{ color: "var(--color-warning)" }}>
+                          Heat taken from the nearest trail
+                        </span>
+                      </>
+                    )}
+                  </>
+                )}
               </Tooltip>
             </Marker>
           );

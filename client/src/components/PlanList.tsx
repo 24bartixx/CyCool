@@ -1,4 +1,4 @@
-import { RotateCcw, Trash2, Undo2 } from 'lucide-react'
+import { ClipboardList, MousePointerClick, RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur } from '../lib/format.ts'
@@ -46,33 +46,52 @@ export default function PlanList({
 
   return (
     <section aria-labelledby="plan-h" className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <h2 id="plan-h" className="text-xs font-semibold uppercase tracking-wide text-muted">
-          Your plan ({plan.length})
+      <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2 id="plan-h" className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground">
+            <ClipboardList className="size-3" aria-hidden />
+          </span>
+          Your plan
+          {plan.length > 0 && (
+            <span className="rounded-full bg-primary-soft px-1.5 py-px text-[11px] tabular-nums tracking-normal text-primary">
+              {plan.length}
+              <span className="sr-only"> {plan.length === 1 ? 'fix' : 'fixes'}</span>
+            </span>
+          )}
         </h2>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!plan.length || busy}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary-soft disabled:text-muted disabled:opacity-50 disabled:hover:bg-transparent"
-          >
-            <Undo2 className="size-3.5" aria-hidden /> Undo last
-          </button>
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={!plan.length || busy}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-background hover:text-foreground disabled:opacity-50"
-          >
-            <RotateCcw className="size-3.5" aria-hidden /> Reset
-          </button>
-        </div>
+        {/* Nothing to undo or reset in an empty plan: hide the actions rather than show them greyed out. */}
+        {plan.length > 0 && (
+          <div className="flex gap-0.5">
+            <button
+              type="button"
+              onClick={onUndo}
+              disabled={busy}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary transition-colors enabled:hover:bg-primary-soft disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <Undo2 className="size-3.5" aria-hidden /> Undo last
+            </button>
+            <button
+              type="button"
+              onClick={onReset}
+              disabled={busy}
+              title="Remove every fix from the plan"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors enabled:hover:bg-danger-soft enabled:hover:text-danger disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              <RotateCcw className="size-3.5" aria-hidden /> Reset
+            </button>
+          </div>
+        )}
       </div>
       {plan.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border-strong p-3 text-xs leading-relaxed text-muted">
-          No fixes yet. Accepted fixes appear here, their cost is taken from the budget and the map updates.
-        </p>
+        <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-border-strong bg-surface-2 px-5 py-6 text-center">
+          <span className="mb-1.5 grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
+            <MousePointerClick className="size-5" aria-hidden />
+          </span>
+          <p className="text-sm font-medium text-foreground">No fixes yet</p>
+          <p className="max-w-60 text-xs leading-relaxed text-muted">
+            Pick a point on the map and accept a fix. Its cost comes out of the budget and the map updates.
+          </p>
+        </div>
       ) : (
         <ol ref={listRef} className="space-y-1">
           {plan.map((f, i) => {

@@ -26,6 +26,21 @@ def test_dataset_shape():
     assert all(any(p.trail_id == t for p in ds.points) for t in ds.trails)
 
 
+def test_all_real_ambici_stations_are_points():
+    stations = [p for p in ds.points if p.kind == "station"]
+    assert len(stations) == 17
+    assert all(p.id.startswith("AMB-") and p.raw["trail_id"] in ds.trails for p in stations)
+    base = baseline_state(ds)
+    vas = {p.raw["vas_id"]: p for p in stations if "vas_id" in p.raw}
+    assert {k: v.id for k, v in vas.items()} == {"EST-B01": "AMB-34863", "EST-B02": "AMB-34868"}
+    for p in vas.values():  # the matched stations add their synthetic temperature anomaly
+        assert p.temp_anomaly_c > 0
+        assert math.isclose(base[p.id].utci, ds.trails[p.trail_id].utci + p.temp_anomaly_c)
+    plain = next(p for p in stations if "vas_id" not in p.raw)
+    assert math.isclose(base[plain.id].utci, ds.trails[plain.trail_id].utci)
+    validate_plan(ds, [("INT-06", p.id) for p in stations], 1e9)  # a canopy fits every station
+
+
 @pytest.mark.parametrize(
     "dist, expected", [(A["water_ok_m"], 0.0), (A["water_bad_m"], 1.0), ((A["water_ok_m"] + A["water_bad_m"]) / 2, 0.5)]
 )

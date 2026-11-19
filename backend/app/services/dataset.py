@@ -4,8 +4,11 @@ The tables are filled by scripts/export_to_db.py. Everything the planner needs i
 mostly in SQL:
   - trails: the VAS-R1 routes linked to real streets (syn_segment_link, from scripts/trail_mapping.yaml)
   - trail pieces: every real segment on a trail; segments over 100 m are split into ~50 m pieces
-  - junctions (CRU-*) and stations (EST-B01/B02): snapped from their synthetic coordinates onto
-    their own trail, because those coordinates are 140-850 m off the real streets
+  - junctions (CRU-*): snapped from their synthetic coordinates onto their own trail, because
+    those coordinates are 140-850 m off the real streets
+  - stations: all real AMBici stations at their real location, on or off the trails. Each takes the
+    UTCI of the nearest trail and the solar value of the nearest street segment; the two VAS-R1
+    stations (EST-B01/B02) are matched to real ones (assumptions.yaml) and add their synthetic data
   - fountains: real municipal fountains, cemetery excluded
   - context network: the rest of the real network, drawn grey
 The services then work on this in memory; the API stays stateless.
@@ -34,7 +37,6 @@ PIECE_TARGET_M = 50.0  # ...into ceil(len / 50) equal pieces
 EXCLUDED_CLASSES = ("Carril Bici_En Projecte DIBA",)  # planned, not built
 EXCLUDED_FOUNTAIN_LOCATIONS = ("Cementiri",)  # not on cyclists' routes
 JUNCTION_CATEGORY = "Critical Traffic Light Junction"
-STATION_IDS = ("EST-B01", "EST-B02")
 CATALOGUE_IDS = ("INT-01", "INT-02", "INT-03", "INT-04", "INT-05", "INT-06")
 
 
@@ -88,7 +90,6 @@ _PARAMS = {
     "excluded_classes": list(EXCLUDED_CLASSES),
     "excluded_fountains": list(EXCLUDED_FOUNTAIN_LOCATIONS),
     "junction_category": JUNCTION_CATEGORY,
-    "station_ids": list(STATION_IDS),
     "catalogue_ids": list(CATALOGUE_IDS),
 }
 
@@ -131,21 +132,20 @@ _PIECES_SQL = f"""
     ORDER BY p.segment_id, p.k
 """
 
-# Junctions and stations snapped onto the union of their own trail's segments; the solar value
-# and street come from the trail piece nearest to the snapped point.
-_SNAPPED_SQL = f"""
+# Junctions snapped onto the union of their own trail's segments; the solar value and street come
+# from the trail piece nearest to the snapped point.
+_JUNCTIONS_SQL = f"""
     WITH {_TRAIL_SEGMENTS},
     trail_line AS (
         SELECT trail_id, ST_Collect(geom) AS geom FROM trail_segment GROUP BY trail_id
     ),
     snapped AS (
-        SELECT sp.*, ST_ClosestPoint(tl.geom, sp.geom) AS snap,
-               CASE WHEN sp.category = :junction_category THEN 'junction' ELSE 'station' END AS kind
+        SELECT sp.*, ST_ClosestPoint(tl.geom, sp.geom) AS snap
         FROM syn_point sp
         JOIN trail_line tl ON tl.trail_id = sp.syn_segment_id
-        WHERE sp.category = :junction_category OR sp.id = ANY(:station_ids)
+        WHERE sp.category = :junction_category
     )
-    SELECT s.id, s.kind, s.syn_segment_id AS trail_id, s.name, s.notes,
+    SELECT s.id, s.syn_segment_id AS trail_id, s.name, s.notes,
            s.traffic_light_wait_s AS wait_s, s.shade_pct, s.temp_anomaly_c,
            ST_Distance(s.geom, s.snap) AS snap_distance_m,
            ST_AsGeoJSON(s.snap, 2) AS utm,
@@ -159,7 +159,39 @@ _SNAPPED_SQL = f"""
         ORDER BY ST_Distance(p.geom, s.snap), p.segment_id, p.k
         LIMIT 1
     ) near
-    ORDER BY s.kind, s.id
+    ORDER BY s.id
+"""
+
+# Real AMBici stations at their own location. The nearest trail piece gives the trail (whose
+# synthetic UTCI the station takes); the nearest street segment of the built network gives the
+# real solar value and the street.
+_STATIONS_SQL = f"""
+    WITH {_TRAIL_SEGMENTS}
+    SELECT a.station_num, a.name, a.address, a.bike_racks,
+           ST_AsGeoJSON(a.geom, 2) AS utm,
+           ST_AsGeoJSON(ST_Transform(a.geom, 4326), 6) AS wgs,
+           (SELECT min(ST_Distance(a.geom, f.geom)) FROM fountain f) AS fountain_dist_m,
+           trail.trail_id, trail.dist AS trail_dist_m,
+           street.id AS solar_segment_id, street.street_name, street.solar_mean AS solar
+    FROM ambici_station a
+    CROSS JOIN LATERAL (
+        SELECT p.trail_id, ST_Distance(p.geom, a.geom) AS dist FROM piece p
+        ORDER BY ST_Distance(p.geom, a.geom), p.segment_id, p.k
+        LIMIT 1
+    ) trail
+    CROSS JOIN LATERAL (
+        SELECT s.id, s.street_name, m.solar_mean FROM cycle_segment s
+        JOIN segment_metrics m ON m.segment_id = s.id
+        WHERE s.cycle_class <> ALL(:excluded_classes)
+        ORDER BY ST_Distance(s.geom, a.geom), s.id
+        LIMIT 1
+    ) street
+    ORDER BY a.station_num
+"""
+
+# Synthetic data of the VAS-R1 stations that are matched to real ones.
+_VAS_STATIONS_SQL = """
+    SELECT id, shade_pct, temp_anomaly_c, notes FROM syn_point WHERE id = ANY(:vas_station_ids)
 """
 
 _TRAILS_SQL = """
@@ -242,8 +274,17 @@ def _to_point(rec: dict[str, Any]) -> MapPoint:
     )
 
 
-def _rows(conn: Connection, sql: str) -> list[dict[str, Any]]:
-    return [dict(r) for r in conn.execute(text(sql), _PARAMS).mappings()]
+def _rows(conn: Connection, sql: str, **params: Any) -> list[dict[str, Any]]:
+    return [dict(r) for r in conn.execute(text(sql), {**_PARAMS, **params}).mappings()]
+
+
+def _vas_station_matches(assumptions: dict[str, Any]) -> dict[int, str]:
+    """{real AMBici station number: VAS-R1 station id}, from entries like "EST-B01 → 34863"."""
+    matches = {}
+    for entry in assumptions["vas_station_match"]:
+        vas_id, station_num = (part.strip() for part in entry.split("→"))
+        matches[int(station_num)] = vas_id
+    return matches
 
 
 # ---------------------------------------------------------------- loaders
@@ -269,14 +310,14 @@ def _load_pieces(conn: Connection) -> list[dict[str, Any]]:
     return pieces
 
 
-def _load_snapped(conn: Connection) -> list[dict[str, Any]]:
+def _load_junctions(conn: Connection) -> list[dict[str, Any]]:
     points = []
-    for r in _rows(conn, _SNAPPED_SQL):
+    for r in _rows(conn, _JUNCTIONS_SQL):
         utm, wgs = _coords(r["utm"]), _latlon(r["wgs"])
         points.append(
             {
                 "id": r["id"],
-                "kind": r["kind"],
+                "kind": "junction",
                 "trail_id": r["trail_id"],
                 "street": r["street_name"],
                 "name": r["name"],
@@ -296,6 +337,41 @@ def _load_snapped(conn: Connection) -> list[dict[str, Any]]:
             }
         )
     return points
+
+
+def _load_stations(conn: Connection, matches: dict[int, str]) -> list[dict[str, Any]]:
+    vas = {r["id"]: r for r in _rows(conn, _VAS_STATIONS_SQL, vas_station_ids=list(matches.values()))}
+    stations = []
+    for r in _rows(conn, _STATIONS_SQL):
+        utm, wgs = _coords(r["utm"]), _latlon(r["wgs"])
+        station = {
+            "id": f"AMB-{r['station_num']}",
+            "kind": "station",
+            "trail_id": r["trail_id"],  # nearest trail: the station takes its synthetic UTCI
+            "street": r["street_name"],
+            "name": r["name"],
+            "address": r["address"],
+            "bike_racks": r["bike_racks"],
+            "length_m": 0.0,
+            "solar": _num(r["solar"], 1),  # real solar of the nearest street segment
+            "solar_from": str(r["solar_segment_id"]),
+            "utm": utm,
+            "mid_utm": utm[0],
+            "wgs": wgs,
+            "mid_wgs": wgs[0],
+            "trail_dist_m": _num(r["trail_dist_m"], 1),
+            "fountain_dist_m": _num(r["fountain_dist_m"], 1),
+        }
+        syn = vas.get(matches.get(r["station_num"], ""))
+        if syn:
+            station.update(
+                vas_id=syn["id"],
+                notes=syn["notes"],
+                shade_pct=_num(syn["shade_pct"]),
+                temp_anomaly_c=_num(syn["temp_anomaly_c"]),
+            )
+        stations.append(station)
+    return stations
 
 
 def _load_trails(conn: Connection, points: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -346,13 +422,20 @@ def _load_catalogue(conn: Connection) -> dict[str, dict[str, Any]]:
     return catalogue
 
 
-def _check(trails: list[dict[str, Any]], points: list[dict[str, Any]], catalogue: dict[str, Any]) -> None:
+def _check(
+    trails: list[dict[str, Any]], points: list[dict[str, Any]], catalogue: dict[str, Any], matches: dict[int, str]
+) -> None:
     """Fail loudly on an unseeded or half-seeded database instead of serving an empty map."""
     problems = []
     if not trails:
         problems.append("no trails (syn_segment_link is empty)")
     if not any(p["kind"] == "segment" for p in points):
         problems.append("no trail segments")
+    if not any(p["kind"] == "station" for p in points):
+        problems.append("no AMBici stations")
+    unmatched = sorted(set(matches.values()) - {p.get("vas_id") for p in points})
+    if unmatched:
+        problems.append(f"VAS-R1 stations without their real AMBici station: {', '.join(unmatched)}")
     missing = sorted(set(CATALOGUE_IDS) - set(catalogue))
     if missing:
         problems.append(f"catalogue entries missing: {', '.join(missing)}")
@@ -367,17 +450,19 @@ def _check(trails: list[dict[str, Any]], points: list[dict[str, Any]], catalogue
 
 
 def load_dataset() -> Dataset:
+    assumption_list = yaml.safe_load(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))
+    assumptions = {a["key"]: a["value"] for a in assumption_list}
+    matches = _vas_station_matches(assumptions)
     with engine.connect() as conn:
         pieces = _load_pieces(conn)
-        points_raw = pieces + _load_snapped(conn)
+        points_raw = pieces + _load_junctions(conn) + _load_stations(conn, matches)
         trails_raw = _load_trails(conn, points_raw)
         fountains = _load_fountains(conn)
         context = _load_context(conn)
         catalogue = _load_catalogue(conn)
-    _check(trails_raw, points_raw, catalogue)
+    _check(trails_raw, points_raw, catalogue, matches)
 
     points = [_to_point(r) for r in points_raw]
-    assumption_list = yaml.safe_load(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))
     segment_solar = [p.solar for p in points if p.kind == "segment"]
     return Dataset(
         points=points,
@@ -385,7 +470,7 @@ def load_dataset() -> Dataset:
         trails={t["id"]: Trail(id=t["id"], raw=t) for t in trails_raw},
         fountains=fountains,
         catalogue=catalogue,
-        assumptions={a["key"]: a["value"] for a in assumption_list},
+        assumptions=assumptions,
         assumption_list=assumption_list,
         context_network=context,
         solar_min=min(segment_solar),
