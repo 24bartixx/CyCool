@@ -1,4 +1,4 @@
-import { ClipboardList, MousePointerClick, RotateCcw, Trash2, Undo2 } from 'lucide-react'
+import { ClipboardList, LoaderCircle, MousePointerClick, RotateCcw, Sparkles, Trash2, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur } from '../lib/format.ts'
@@ -19,6 +19,11 @@ type Props = {
   onUndo: () => void
   onReset: () => void
   onSelect: (id: string) => void
+  onAutoPlan: () => void
+  autoPlanning: boolean
+  /** Short name of the selected metric, for the auto-plan button. */
+  metricLabel: string
+  remaining: number
   busy: boolean
 }
 
@@ -31,6 +36,10 @@ export default function PlanList({
   onUndo,
   onReset,
   onSelect,
+  onAutoPlan,
+  autoPlanning,
+  metricLabel,
+  remaining,
   busy,
 }: Props) {
   const listRef = useRef<HTMLOListElement>(null)
@@ -82,6 +91,16 @@ export default function PlanList({
           </div>
         )}
       </div>
+      <button
+        type="button"
+        onClick={onAutoPlan}
+        disabled={busy || autoPlanning || remaining <= 0}
+        title="Adds the fixes that cut the selected metric's burden most per euro, until the budget runs out. A greedy heuristic: review the result and remove what you don't want."
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted"
+      >
+        {autoPlanning ? <LoaderCircle className="size-3.5 animate-spin" aria-hidden /> : <Sparkles className="size-3.5" aria-hidden />}
+        Fill the rest of the budget for {metricLabel.toLowerCase()}
+      </button>
       {plan.length === 0 ? (
         <div className="flex flex-col items-center gap-1 rounded-xl border border-border bg-surface-2 px-5 py-6 text-center">
           <span className="mb-1.5 grid size-10 place-items-center rounded-full bg-primary-soft text-primary">
@@ -120,7 +139,10 @@ export default function PlanList({
                     <span className="line-clamp-2 text-sm leading-tight font-medium">
                       {i + 1}. {f.label}
                     </span>
-                    <span className="block truncate text-[11px] text-muted">{location}</span>
+                    <span className="block truncate text-[11px] text-muted">
+                      {location}
+                      {f.length_m > 0 && ` · ${Math.round(f.length_m)} m of street`}
+                    </span>
                   </span>
                   <span className="text-xs font-semibold tabular-nums">{eur(f.cost_eur)}</span>
                 </button>

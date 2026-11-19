@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router";
 import { ApiError } from "../api/client.ts";
 import {
   getMapData,
+  postAutoPlan,
   postEvaluate,
   postRecommend,
   type AcceptedFix,
@@ -71,6 +72,7 @@ export function usePlanner() {
   const [recommendation, setRecommendation] = useState<Load<Recommendation>>({
     loading: false,
   });
+  const [autoPlanning, setAutoPlanning] = useState(false);
   const lastGood = useRef<AcceptedFix[]>([]);
 
   // ---- static map data (once, with retry) ----
@@ -188,6 +190,29 @@ export function usePlanner() {
     setAccepted([]);
   }, []);
 
+  /** Lets the server fill the rest of the budget with the best fixes per euro for the current metric. */
+  const autoPlan = useCallback(() => {
+    if (!evaluation) return;
+    setNotice(undefined);
+    setAutoPlanning(true);
+    const current = evaluation.plan.map(({ fix_id, point_id }) => ({
+      fix_id,
+      point_id,
+    }));
+    postAutoPlan({
+      metric: evaluation.metric,
+      budget: evaluation.budget.total,
+      accepted: current,
+    })
+      .then((res) => {
+        if (res.added.length === 0)
+          setNotice("No affordable fix improves this metric any further.");
+        else setAccepted(res.accepted);
+      })
+      .catch((e) => setNotice(`Couldn't fill the budget: ${message(e)}`))
+      .finally(() => setAutoPlanning(false));
+  }, [evaluation]);
+
   const pointsById = useMemo(
     () => new Map(mapData.data?.points.map((p) => [p.id, p])),
     [mapData.data],
@@ -218,6 +243,8 @@ export function usePlanner() {
     remove,
     undo,
     reset,
+    autoPlan,
+    autoPlanning,
     selectedId,
     setSelectedId,
     recommendation,

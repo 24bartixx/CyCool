@@ -1,4 +1,4 @@
-import { MapPin, X } from 'lucide-react'
+import { Bike, MapPin, X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { MapPointInfo, MetricId, PointResult, Trail } from '../api/planner.ts'
 import { celsius, int, metres } from '../lib/format.ts'
@@ -22,7 +22,6 @@ type Props = {
   result?: PointResult
   metric: MetricId
   isWorst: boolean
-  solarUnit: string
   onClose: () => void
   /** The recommended fixes, when they are shown inside the details (smaller screens). */
   children?: ReactNode
@@ -49,7 +48,7 @@ function MetricRow(props: { metric: MetricId; active: boolean; score: number; de
 }
 
 export default function PointDrawer(props: Props) {
-  const { placement, point, trail, result, metric, isWorst, solarUnit, onClose, children } = props
+  const { placement, point, trail, result, metric, isWorst, onClose, children } = props
   const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -83,6 +82,13 @@ export default function PointDrawer(props: Props) {
           </div>
           <h2 className={`mt-1 font-semibold leading-snug ${dense ? 'text-base' : 'text-lg'}`}>{pointTitle(point)}</h2>
           <p className="text-xs text-muted">{pointSubtitle(point, trail)}</p>
+          {trail && (
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-muted" title="Synthetic VAS-R1 daily cyclists on this trail">
+              <Bike className="size-3.5 shrink-0" aria-hidden />
+              {int(trail.riders_spring)} cyclists/day in spring, {int(trail.riders_summer)} in summer (synthetic)
+            </p>
+          )}
+          {point.located_by && <p className="mt-0.5 text-xs text-warning">Placed at: {point.located_by}</p>}
         </div>
         <button ref={closeRef} type="button" onClick={onClose} aria-label="Close details" className="rounded-md p-1 text-muted hover:bg-background hover:text-foreground">
           <X className="size-5" />
@@ -98,10 +104,18 @@ export default function PointDrawer(props: Props) {
                 {
                   id: 'sun',
                   detail:
-                    `Solar ${int(raw.solar)} ${solarUnit}` +
+                    `Solar index ${int(raw.solar)} (municipal raster, no stated unit)` +
                     (raw.wait_s != null ? ` · red light ${int(raw.wait_s)} s at ${int(raw.shade_pct)} % shade` : ''),
                 },
-                { id: 'heat', detail: `UTCI ${celsius(raw.utci_c)} at 14:00 (synthetic)` },
+                {
+                  id: 'heat',
+                  detail:
+                    `UTCI ${celsius(raw.utci_c)} at 14:00` +
+                    (raw.utci_c < raw.utci_base_c - 0.05 ? ` (was ${celsius(raw.utci_base_c)})` : '') +
+                    (point.kind === 'segment'
+                      ? ` · trail ${celsius(trail?.utci_2pm_c)} (synthetic), adjusted for this piece's sun`
+                      : ' · trail value plus local anomaly (synthetic)'),
+                },
                 { id: 'combined', detail: 'Mean of water, sun and heat' },
               ] satisfies { id: MetricId; detail: string }[]
             )

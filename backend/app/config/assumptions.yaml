@@ -1,18 +1,32 @@
 # Every number the model uses that is NOT read from a dataset lives here.
 # source: "catalogue" (VAS-R1 interventions CSV), "VAS-R1 data", "standard" (published reference)
 # or "team assumption" (our choice; stated openly in the UI).
+
+# ---- scores
 - key: water_ok_m
   label: Water within a short detour
   value: 100
   unit: m
   source: team assumption
-  note: A fountain or oasis within 100 m of the trail counts as reachable (matches the 100 m fountain buffers).
+  note: A fountain or oasis within 100 m (straight line) of the trail counts as reachable (matches the 100 m fountain buffers).
 - key: water_bad_m
   label: Water too far
   value: 300
   unit: m
   source: team assumption
   note: At 300 m or more the water score is 1 (worst). Linear in between.
+- key: solar_low_pct
+  label: Sun score 0 at this percentile
+  value: 5
+  unit: percentile
+  source: team assumption
+  note: The municipal solar raster has no stated unit ("working measure"), so sun is scored relative to the whole built cycle network, not to the trails in scope. Its 5th percentile scores 0.
+- key: solar_high_pct
+  label: Sun score 1 at this percentile
+  value: 95
+  unit: percentile
+  source: team assumption
+  note: The 95th percentile of the solar index over the whole built network scores 1. Percentiles instead of min/max keep outliers from stretching the scale.
 - key: utci_ok_c
   label: UTCI with no heat stress
   value: 26
@@ -25,81 +39,141 @@
   unit: °C
   source: standard
   note: Upper bound of the UTCI "very strong heat stress" band; temperature score 1.
+- key: weight_heat
+  label: Weight of heat in the combined score
+  value: 0.5
+  unit: share
+  source: team assumption
+  note: The challenge is about heat. The piece UTCI is already shifted by its real sun exposure, so sun is partly inside heat; giving sun and heat equal weight would count sun twice.
+- key: weight_sun
+  label: Weight of sun in the combined score
+  value: 0.25
+  unit: share
+  source: team assumption
+  note: Sun exposure on its own (also the shade at a red-light waiting box).
+- key: weight_water
+  label: Weight of water in the combined score
+  value: 0.25
+  unit: share
+  source: team assumption
+  note: Water access matters, but less than heat for a ~15 min trip. Weights are normalised to sum 1.
 - key: comfortable_utci_c
   label: Comfortable cycling threshold
   value: 32
   unit: °C
   source: standard
-  note: UTCI above 32 °C is "strong heat stress"; a trail point below it counts as climate-comfortable.
+  note: UTCI above 32 °C is "strong heat stress"; a trail piece below it counts as climate-comfortable. A typical piece of a "Critical" trail stays above it even with trees and cool pavement (e.g. 38.4 - 4.5 - 0.9 = 33.0 °C), so this KPI moves most on moderate trails; read it together with the km out of very strong heat and the °C reduction at critical points.
 - key: strong_heat_utci_c
   label: Very strong heat stress threshold
   value: 38
   unit: °C
   source: standard
-  note: UTCI 38 °C and above is "very strong heat stress"; a trail point below it is at most in strong heat stress.
-- key: solar_unit
-  label: Unit of the solar value
-  value: W/m²
-  unit: ""
+  note: UTCI 38 °C and above is "very strong heat stress"; a trail piece below it is at most in strong heat stress.
+- key: heat_reference_hour
+  label: Hour of the heat model
+  value: 14
+  unit: h
+  source: VAS-R1 data
+  note: Trail UTCI is given at 14:00. Each piece is shifted from its trail's UTCI by its real sun exposure, scaled by the gap between unshaded asphalt and a shaded park in the hourly profile at this hour.
+
+# ---- ranking and burden
+- key: cycling_speed_ms
+  label: Cycling speed
+  value: 4.2
+  unit: m/s
   source: team assumption
-  note: The solar raster screen is labelled "working measure, no units"; we treat it as W/m².
-- key: junction_wait_ref_s
-  label: Reference red-light wait
-  value: 70
+  note: About 15 km/h, a typical urban commuting speed. Turns piece length into seconds of exposure. Each piece's time is scaled so a trail's total ride time matches its VAS-R1 length, because the matched real street can be longer or shorter than the synthetic route.
+- key: station_dwell_s
+  label: Time spent at a bike station
+  value: 60
   unit: s
   source: team assumption
-  note: A wait of 70 s in full sun gives a wait-exposure of 1 (longest wait in the data is 68 s).
-- key: point_weight_m
-  label: Weight of a junction or station
-  value: 100
-  unit: m
+  note: Docking or undocking a bike. Junctions use their own red-light wait from the data (shortened by a green wave).
+- key: station_users_per_day
+  label: People using a bike station per day
+  value: 150
+  unit: people/day
   source: team assumption
-  note: Junctions and stations have no length; they count like 100 m of trail when ranking.
+  note: A station has 20-40 docks (catalogue INT-06 unit) used ~5 times a day. Only these people stand at the station; weighting it by every rider of its trail (up to 1,150) overstated it.
 - key: station_heat_from
   label: Heat and sun at an AMBici station
   value: nearest trail
   unit: ""
   source: team assumption
-  note: The real AMBici stations have no heat data. Each takes the synthetic UTCI of the nearest VAS-R1 trail (also when it lies off the trails) and the real solar value of the nearest street segment.
+  note: The real AMBici stations have no heat data. Each takes the synthetic UTCI of the nearest VAS-R1 trail (also when it lies off the trails) and the real solar index of the nearest street segment.
 - key: vas_station_match
   label: VAS-R1 stations placed on real AMBici stations
   value: ["EST-B01 → 34863", "EST-B02 → 34868"]
   unit: ""
   source: team assumption
-  note: Matched by name and trail, as their synthetic coordinates are 120–650 m off. "Train Station Hub" is 02. RENFE - Parc de la Marina; "Atrium" on Tarradellas Ave is 09. Torrent Ballester - Atrium. Both keep their synthetic temperature anomaly.
+  note: Matched by name and trail, as their synthetic coordinates are 120–650 m off. "Train Station Hub" is 02. RENFE - Parc de la Marina; "Atrium" on Tarradellas Ave is 09. Torrent Ballester - Atrium. Both keep their synthetic temperature anomaly and shade.
+
+# ---- fix effects
 - key: trees_solar_cut
   label: Sun blocked by trees (INT-01)
   value: 0.5
   unit: share
   source: team assumption
-  note: The catalogue gives °C but not shade; mature tree alignment assumed to halve solar exposure.
-- key: oasis_solar_cut
-  label: Sun blocked by an oasis pergola (INT-03)
-  value: 0.3
-  unit: share
-  source: team assumption
-  note: Pergola covers part of the surroundings only.
-- key: oasis_radius_m
-  label: Reach of an oasis' cooling
-  value: 25
-  unit: m
-  source: team assumption
-  note: Trail points within 25 m of an oasis get its UTCI and sun reduction.
+  note: The catalogue gives °C but not shade; a mature tree alignment is assumed to halve the solar index.
 - key: canopy_solar_cut
   label: Sun blocked by a station canopy (INT-06)
   value: 0.5
   unit: share
   source: team assumption
   note: Solar canopy over the docks.
+- key: stacking_secondary_factor
+  label: Extra cooling of a second fix at the same place
+  value: 0.5
+  unit: share
+  source: team assumption
+  note: The largest UTCI reduction at a place counts fully; every further one counts at 50% (e.g. cool pavement under new trees heats up less anyway). Caveat - the cool-pavement UTCI cut is the synthetic catalogue value; field studies of reflective coatings found cooler surfaces but more reflected sun on people at midday, so its real effect on riders is uncertain.
 - key: green_wave_wait_s
   label: Wait after green-wave priority (INT-05)
   value: 15
   unit: s
   source: catalogue
-  note: Catalogue note "cuts cyclist waiting time in the sun from 65 s to <15 s".
+  note: Catalogue note "cuts cyclist waiting time in the sun from 65 s to <15 s". The green wave shortens the time spent at the red light (exposure time); it does not change the temperature there, so the catalogue UTCI figure is not applied on top.
 - key: linear_fix_unit_m
   label: Pricing unit of trees and cool pavement
   value: 100
   unit: m
   source: catalogue
-  note: INT-01 and INT-04 are priced per 100 linear metres; cost is pro-rata to the point's length.
+  note: INT-01 and INT-04 are priced per 100 linear metres and are laid along the whole real street segment, priced pro rata to its length.
+
+# ---- KPIs (riders and replaced trips)
+- key: cool_benchmark_trails
+  label: Cool benchmark trails
+  value: [TRM-03, TRM-07]
+  unit: ""
+  source: VAS-R1 data
+  note: The two trails with the lowest UTCI and the smallest summer ridership drop. Removing a trail's heat dose above their mean UTCI (UTCI excess x rider-seconds on its pieces and junctions) wins back all of its summer drop, proportionally in between. Checked against the data - across the 14 trails the summer drop is linear in UTCI (r = 0.99) and reaches zero at ~28.7 °C, close to the benchmark mean of 29.85 °C.
+- key: summer_days
+  label: Summer days per year
+  value: 122
+  unit: days
+  source: team assumption
+  note: June to September.
+- key: trips_per_cyclist_day
+  label: Trips per cyclist per day
+  value: 2
+  unit: trips
+  source: team assumption
+  note: A return journey. Turns recovered trips into new summer cyclists.
+- key: avg_trip_km
+  label: Average trip length
+  value: 3.8
+  unit: km
+  source: catalogue
+  note: INT-08 "replaced trip (3.8 km avg)". Recovered rider-km on the trails are divided by it to count trips once, even when a trip uses several trails.
+- key: eur_per_trip
+  label: Saving per replaced trip
+  value: 1.15
+  unit: €
+  source: catalogue
+  note: INT-08 "saves €1.15" per trip kept on a bike instead of a car. Its CO₂ factor (kg per trip) is read from the catalogue itself.
+- key: car_trip_share
+  label: Share of won-back trips that replace a car trip
+  value: 0.5
+  unit: share
+  source: team assumption
+  note: INT-08 assumes every trip kept on a bike replaces a car trip. In summer some people walk, take the bus or don't travel instead, so only this share counts for CO₂ and € saved.

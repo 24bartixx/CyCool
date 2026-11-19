@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.dataset import get_dataset
 from app.services.effect_service import PlanError, baseline_state, plan_state, validate_plan
-from app.services.metric_service import score_point
-from app.services.planner_service import evaluate, recommend
+from app.services.metric_service import burden, exposure_s, score_point
+from app.services.planner_service import auto_plan, evaluate, recommend
 
 ds = get_dataset()
 A = ds.assumptions
@@ -133,41 +133,55 @@ def test_greedy_loop_never_increases_burden_or_overspends(metric):
 def test_kpis_without_plan_have_no_ratios():
     k = evaluate(ds, "heat", 50_000, [])["kpis"]
     assert k["eur_per_comfortable_km"] is None
-    assert k["utci_drop_avg_c"] is None and k["capex_eur"] == 0
+    assert k["critical_drop_avg_c"] is None and k["capex_eur"] == 0
     assert k["utci_drop_trail_avg_c"] is None and k["utci_cooled_trail_km"] == 0
 
 
 def test_trail_utci_drop_weights_cooled_sections_by_length():
-    segments = [p for p in ds.points if p.kind == "segment"]
-    short = min(segments, key=lambda p: p.length_m)
-    long = max(segments, key=lambda p: p.length_m)
+    # Unsplit segments, so a linear fix cools exactly that one piece.
+    single = [ps[0] for ps in ds.pieces_by_segment.values() if len(ps) == 1]
+    short = min(single, key=lambda p: p.length_m)
+    long = max(single, key=lambda p: p.length_m)
     junction = first("junction")
     accepted = [("INT-01", short.id), ("INT-04", short.id), ("INT-04", long.id), ("INT-02", junction.id)]
     k = evaluate(ds, "heat", 50_000, accepted)["kpis"]
 
     pavement_drop = -ds.catalogue["INT-04"]["utci_reduction_c"]
-    short_drop = pavement_drop - ds.catalogue["INT-01"]["utci_reduction_c"]
+    trees_drop = -ds.catalogue["INT-01"]["utci_reduction_c"]
+    short_drop = trees_drop + A["stacking_secondary_factor"] * pavement_drop
     cooled_m = short.length_m + long.length_m
     assert k["utci_cooled_trail_km"] == pytest.approx(cooled_m / 1000)
     assert k["utci_drop_trail_avg_c"] == pytest.approx((short_drop * short.length_m + pavement_drop * long.length_m) / cooled_m)
 
 
 def test_cooling_a_hot_trail_makes_it_comfortable():
-    trail = "TRM-05"  # UTCI 37.2 °C, minus trees 4.5 and cool pavement 1.8 = 30.9 < 32
-    segs = [p.id for p in ds.points if p.kind == "segment" and p.trail_id == trail]
+    trail = "TRM-04"  # UTCI 34.5 °C, minus trees 4.5 and half of cool pavement 1.8 = 29.1 < 32
+    segs = [ps[0].id for ps in ds.pieces_by_segment.values() if ps[0].trail_id == trail]  # one per real segment
     accepted = [("INT-01", s) for s in segs] + [("INT-04", s) for s in segs]
     k = evaluate(ds, "heat", 1e7, accepted)["kpis"]
+    pieces = [p for p in ds.points if p.kind == "segment" and p.trail_id == trail]
+    already_km = sum(p.length_m for p in pieces if ds.base_utci[p.id] < A["comfortable_utci_c"]) / 1000
     real_km = ds.trails[trail].raw["real_length_m"] / 1000
-    assert math.isclose(k["comfortable_km_gain"], real_km, abs_tol=1e-3)  # real_length_m is rounded to 0.1 m
+    assert math.isclose(k["comfortable_km_gain"], real_km - already_km, abs_tol=1e-3)  # rounded to 0.1 m
     assert k["eur_per_comfortable_km"] is not None
+    assert math.isclose(k["adapted_km"], real_km, abs_tol=1e-3)
 
 
 def test_trees_lift_a_very_hot_piece_out_of_very_strong_heat():
-    trail = "TRM-02"  # UTCI 40.1 °C, minus trees 4.5 = 35.6: below 38 but still above 32
-    seg = next(p for p in ds.points if p.kind == "segment" and p.trail_id == trail)
-    k = evaluate(ds, "heat", 1e7, [("INT-01", seg.id)])["kpis"]
+    # TRM-02 is 40.1 °C on average; trees (−4.5 °C) cover the whole real segment. Pick a segment whose
+    # pieces are all in very strong heat today and all drop below 38 °C, but stay above 32 °C.
+    cut = -ds.catalogue["INT-01"]["utci_reduction_c"]
+
+    def lifted(u: float) -> bool:
+        return u >= A["strong_heat_utci_c"] and A["comfortable_utci_c"] <= u - cut < A["strong_heat_utci_c"]
+
+    pieces = next(
+        ps for ps in ds.pieces_by_segment.values()
+        if ps[0].trail_id == "TRM-02" and all(lifted(ds.base_utci[p.id]) for p in ps)
+    )
+    k = evaluate(ds, "heat", 1e7, [("INT-01", pieces[0].id)])["kpis"]
     gain = k["after"]["below_strong_heat_km"] - k["before"]["below_strong_heat_km"]
-    assert gain == pytest.approx(seg.length_m / 1000)
+    assert gain == pytest.approx(sum(p.length_m for p in pieces) / 1000)
     assert k["comfortable_km_gain"] == 0
 
 
@@ -192,7 +206,7 @@ def test_recommendation_reports_impacts_outside_the_selected_metric():
     oasis = options["INT-03"]
     assert oasis["status"] == "available"
     impacts = {i["metric"]: i for i in oasis["local_impacts"]}
-    assert set(impacts) == {"water", "sun", "heat", "combined"}
+    assert set(impacts) == {"water", "combined"}  # an oasis adds water only
     assert all(i["before"] > i["after"] for i in impacts.values())
     assert (impacts["water"]["before"], impacts["water"]["after"]) == (oasis["local_before"], oasis["local_after"])
     assert {i["metric"] for i in options["INT-04"]["local_impacts"]} == {"heat", "combined"}
@@ -205,3 +219,81 @@ def test_recommendation_reports_measurement_when_score_is_already_zero():
     water = next(i for i in oasis["local_impacts"] if i["metric"] == "water")
     assert water["before"] == water["after"] == 0
     assert water["measurement"] == {"before": round(target.fountain_dist_m, 1), "after": 0.0, "unit": "m"}
+
+
+# ---------------------------------------------------------------- scoring fixes
+
+
+def test_trails_use_cycle_lanes_and_keep_their_vas_r1_ride_time():
+    base = baseline_state(ds)
+    for tid, trail in ds.trails.items():
+        pieces = [p for p in ds.points if p.kind == "segment" and p.trail_id == tid]
+        ride_s = sum(exposure_s(ds, p, base[p.id]) for p in pieces)
+        assert ride_s == pytest.approx(trail.raw["synthetic_length_m"] / A["cycling_speed_ms"], rel=1e-3)
+    # Fraternitat's unclassified ('0') stretches are no longer part of TRM-14.
+    assert ds.trails["TRM-14"].raw["real_length_m"] < 1100
+
+
+def test_green_wave_shortens_the_wait_not_the_temperature():
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    base = baseline_state(ds)
+    after = plan_state(ds, [("INT-05", junction.id)])
+    assert after[junction.id].utci == base[junction.id].utci
+    assert after[junction.id].wait_s == A["green_wave_wait_s"]
+    heat = score_point(ds, junction, base[junction.id]).heat
+    cut = 1 - burden(ds, junction, after[junction.id], heat) / burden(ds, junction, base[junction.id], heat)
+    assert cut == pytest.approx(1 - A["green_wave_wait_s"] / junction.wait_s)
+
+
+def test_oasis_at_a_station_only_adds_water():
+    station = max((p for p in ds.points if p.kind == "station"), key=lambda p: p.fountain_dist_m)
+    base = baseline_state(ds)[station.id]
+    after = plan_state(ds, [("INT-03", station.id)])[station.id]
+    assert (after.utci, after.solar, after.shade_pct, after.wait_s) == (base.utci, base.solar, base.shade_pct, base.wait_s)
+    assert after.water_dist_m < base.water_dist_m
+
+
+def test_combined_uses_the_configured_weights():
+    p = first("segment")
+    sc = score_point(ds, p, baseline_state(ds)[p.id])
+    w = A["weight_water"] + A["weight_sun"] + A["weight_heat"]
+    expected = (A["weight_water"] * sc.water + A["weight_sun"] * sc.sun + A["weight_heat"] * sc.heat) / w
+    assert sc.combined == pytest.approx(expected)
+
+
+def test_critical_average_counts_uncooled_points():
+    junction = first("junction")
+    k = evaluate(ds, "heat", 50_000, [("INT-02", junction.id)])["kpis"]
+    drop = -ds.catalogue["INT-02"]["utci_reduction_c"]
+    assert k["critical_cooled"] == 1
+    assert k["critical_drop_cooled_avg_c"] == pytest.approx(drop)
+    assert k["critical_drop_avg_c"] == pytest.approx(drop / k["critical_total"])
+
+
+def test_junction_fixes_win_back_riders_and_car_share_scales_co2(monkeypatch):
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    k = evaluate(ds, "heat", 50_000, [("INT-05", junction.id)])["kpis"]
+    assert k["new_summer_cyclists"] > 0 and k["eur_per_new_cyclist"] is not None
+    monkeypatch.setitem(A, "car_trip_share", A["car_trip_share"] / 2)
+    half = evaluate(ds, "heat", 50_000, [("INT-05", junction.id)])["kpis"]
+    assert half["co2_trips_t_per_year"] == pytest.approx(k["co2_trips_t_per_year"] / 2)
+    assert half["eur_saved_per_cyclist_year"] == pytest.approx(k["eur_saved_per_cyclist_year"] / 2)
+    assert half["new_summer_cyclists"] == pytest.approx(k["new_summer_cyclists"])
+
+
+def test_canopy_co2_is_reported_as_avoided_not_sequestered():
+    station = first("station")
+    k = evaluate(ds, "heat", 50_000, [("INT-06", station.id)])["kpis"]
+    assert k["co2_sequestration_t_per_year"] == 0
+    assert k["co2_pv_avoided_t_per_year"] == pytest.approx(ds.catalogue["INT-06"]["co2_kg_yr"] / 1000)
+
+
+def test_auto_plan_beats_every_single_fix():
+    budget = 25_000
+    plan = auto_plan(ds, "heat", budget, [])["accepted"]
+    auto = evaluate(ds, "heat", budget, [(f["fix_id"], f["point_id"]) for f in plan])["burden"]["current"]
+    for pid in evaluate(ds, "heat", budget, [])["worst"]:
+        for o in recommend(ds, "heat", budget, [], pid)["options"]:
+            if o["status"] == "available":
+                single = evaluate(ds, "heat", budget, [(o["fix_id"], pid)])["burden"]["current"]
+                assert auto <= single + 1e-9

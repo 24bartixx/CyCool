@@ -1,6 +1,7 @@
 import {
   Bike,
   Droplets,
+  Euro,
   Flame,
   Gauge,
   Leaf,
@@ -11,6 +12,7 @@ import {
   Timer,
   TreeDeciduous,
   Umbrella,
+  Users,
   Zap,
   type LucideIcon,
 } from 'lucide-react'
@@ -39,6 +41,8 @@ export const KPI_ICON = {
   water: Droplets,
   cooling: ThermometerSnowflake,
   co2: Leaf,
+  riders: Users,
+  cost: Euro,
 } satisfies Record<string, LucideIcon>
 
 export const METRIC_SHORT: Record<MetricId, string> = {

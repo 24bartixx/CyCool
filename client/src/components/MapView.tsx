@@ -786,8 +786,8 @@ export default function MapView({
                 <br />
                 {p.kind === "junction" ? (
                   <span style={{ color: "var(--color-warning)" }}>
-                    Approximate location (synthetic, moved{" "}
-                    {metres(p.snap_distance_m)})
+                    {p.located_by ?? "Approximate location"} · synthetic point,
+                    moved {metres(p.snap_distance_m)}
                   </span>
                 ) : (
                   <>

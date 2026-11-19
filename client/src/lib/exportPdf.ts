@@ -266,7 +266,7 @@ export function buildPlanPdf({
     head: [["Indicator", "Today", "With the plan", "Change"]],
     body: [
       [
-        `${metricLabel} burden (score x length, today = 100)`,
+        `${metricLabel} burden (score x riders x time spent, today = 100)`,
         r == null ? DASH : "100",
         r == null ? DASH : dec1(100 - r),
         r == null
@@ -311,24 +311,36 @@ export function buildPlanPdf({
           : "no trail section cooled",
       ],
       [
-        "Largest local UTCI drop",
-        k.utci_drop_max_c ? `-${celsius(k.utci_drop_max_c)}` : DASH,
+        "UTCI drop at critical points (average over all of them)",
+        k.critical_drop_avg_c == null
+          ? `${DASH} (none of ${int(k.critical_total)} cooled)`
+          : `-${celsius(k.critical_drop_avg_c)}; -${celsius(k.critical_drop_cooled_avg_c)} at the ${int(k.critical_cooled)} of ${int(k.critical_total)} cooled, max -${celsius(k.critical_drop_max_c)}`,
       ],
       [
-        "Points cooled (trail pieces, junctions, stations)",
-        int(k.points_cooled),
+        "Summer cyclists won back",
+        `${dec1(k.new_summer_cyclists)} cyclists (${dec1(k.recovered_trips_per_day)} trips per day)`,
       ],
       [
-        "CO2 sequestered or avoided",
-        `${dec2(k.co2_t_per_year)} t CO2e per year`,
+        "CO2 avoided",
+        `${dec2(k.co2_t_per_year)} t CO2e per year: ${dec2(k.co2_trips_t_per_year)} t replaced car trips, ${dec2(k.co2_sequestration_t_per_year)} t trees and oases, ${dec2(k.co2_pv_avoided_t_per_year)} t solar canopies`,
       ],
       ["Investment (one-off)", eur(k.capex_eur)],
       ["Yearly upkeep", `${eur(k.opex_eur_per_year)} per year`],
       [
-        "Investment per comfortable km gained",
-        k.eur_per_comfortable_km == null
-          ? `${DASH} (no comfortable km gained)`
-          : `${eur(k.eur_per_comfortable_km)} per km`,
+        "Cost per km adapted (trees, cool pavement)",
+        k.eur_per_adapted_km == null
+          ? `${DASH} (no trail piece got trees or cool pavement)`
+          : `${eur(k.eur_per_adapted_km)} per km on ${km(k.adapted_km)}`,
+      ],
+      [
+        "Cost per summer cyclist won back",
+        k.eur_per_new_cyclist == null
+          ? DASH
+          : `${eur(k.eur_per_new_cyclist)} + ${eur(k.opex_eur_per_new_cyclist_year ?? 0)} per year`,
+      ],
+      [
+        "Saved per cyclist per year on travel",
+        eur(k.eur_saved_per_cyclist_year),
       ],
     ],
     columnStyles: { 0: { cellWidth: 82 }, 1: { cellWidth: 100 } },
@@ -445,7 +457,7 @@ export function buildPlanPdf({
   y = note(
     doc,
     y + 1,
-    "Coordinates are WGS84 latitude, longitude at the middle of each place; click them to open the spot in OpenStreetMap. Junction locations are approximate: the synthetic VAS-R1 junctions were moved onto their own trail. Trees and cool pavement are priced per 100 m of trail, so their cost follows the length of the trail piece.",
+    "Coordinates are WGS84 latitude, longitude at the middle of each place; click them to open the spot in OpenStreetMap. Junctions are placed at the real crossing or facility their VAS-R1 name refers to (the synthetic coordinates are 140-850 m off). Trees and cool pavement are priced per 100 m and laid along the whole real street segment, so their cost follows its length.",
   );
   y += 8;
 
