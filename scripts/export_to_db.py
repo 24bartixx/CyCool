@@ -1,6 +1,7 @@
 """Seed the CoolCycle database from scripts/data and compute per-segment aggregates.
 
 Loads the municipal layers and the synthetic VAS-R1 tables from CoolCycle_Viladecans.gpkg,
+the OpenStreetMap park outlines from osm_parks.geojson (made by fetch_osm_parks.py),
 the per-segment solar statistics from bike_solar_screen_geojson.geojson, then computes
 segment_metrics in PostGIS (nearest fountain / AMBici / facility distances, rider counts).
 
@@ -33,6 +34,9 @@ from typing import Any
 
 import psycopg
 import yaml
+from pyproj import Transformer
+import shapely
+from shapely.geometry import MultiPolygon, Polygon, shape
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPTS_DIR.parent
@@ -41,6 +45,7 @@ SRID = 25831
 GPKG_NAME = "CoolCycle_Viladecans.gpkg"
 TRAIL_MAPPING_FILE = SCRIPTS_DIR / "trail_mapping.yaml"
 SOLAR_GEOJSON_NAME = "bike_solar_screen_geojson.geojson"
+OSM_PARKS_NAME = "osm_parks.geojson"
 
 DATA_SOURCES = [
     {
@@ -63,6 +68,13 @@ DATA_SOURCES = [
         "name": "Computed by scripts/export_to_db.py: Euclidean nearest-amenity distances and rider assignment",
         "url": None,
         "notes": None,
+    },
+    {
+        "code": "osm_parks",
+        "origin": "external",
+        "name": "OpenStreetMap leisure=park polygons (© OpenStreetMap contributors, ODbL)",
+        "url": "https://www.openstreetmap.org/copyright",
+        "notes": f"Fetched with scripts/fetch_osm_parks.py into {OSM_PARKS_NAME}",
     },
     {
         "code": "vas_r1_synthetic",
@@ -94,7 +106,7 @@ INTERVENTION_UNITS: dict[str, tuple[str, str]] = {
 
 DATA_TABLES = [
     "plan_item", "plan", "segment_metrics", "syn_segment_link", "syn_point", "syn_segment", "hourly_profile",
-    "intervention_type", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
+    "intervention_type", "osm_park", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
     "data_source",
 ]
 
@@ -227,6 +239,23 @@ def seed_municipal(cur: psycopg.Cursor, gpkg: sqlite3.Connection, source_id: int
         }
         for r in gpkg_rows(gpkg, "city_facilities")
     ])
+
+
+def seed_osm_parks(cur: psycopg.Cursor, geojson_path: Path, source_id: int) -> None:
+    """OSM park outlines (WGS84 GeoJSON) projected to EPSG:25831."""
+    to_utm = Transformer.from_crs(4326, SRID, always_xy=True).transform
+    rows = []
+    for f in json.loads(geojson_path.read_text(encoding="utf-8"))["features"]:
+        geom = shapely.transform(shape(f["geometry"]), to_utm, interleaved=False)
+        if isinstance(geom, Polygon):
+            geom = MultiPolygon([geom])
+        rows.append({
+            "id": f["properties"]["osm_id"],
+            "source_id": source_id,
+            "name": f["properties"].get("name"),
+            "geom": geom.wkb,
+        })
+    upsert(cur, "osm_park", rows)
 
 
 def seed_synthetic(cur: psycopg.Cursor, gpkg: sqlite3.Connection, source_id: int) -> None:
@@ -414,7 +443,8 @@ def aggregate_cyclists(cur: psycopg.Cursor) -> None:
 def run(data_dir: Path, reset: bool) -> None:
     gpkg_path = data_dir / GPKG_NAME
     solar_path = data_dir / SOLAR_GEOJSON_NAME
-    for path in (gpkg_path, solar_path):
+    parks_path = data_dir / OSM_PARKS_NAME
+    for path in (gpkg_path, solar_path, parks_path):
         if not path.is_file():
             sys.exit(f"Missing input file: {path}")
 
@@ -430,6 +460,7 @@ def run(data_dir: Path, reset: bool) -> None:
         print("Seeding")
         sources = seed_sources(cur)
         seed_municipal(cur, gpkg, sources["viladecans_municipal"])
+        seed_osm_parks(cur, parks_path, sources["osm_parks"])
         seed_synthetic(cur, gpkg, sources["vas_r1_synthetic"])
         link_synthetic_segments(cur)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import heapq
+
 from app.services.dataset import Dataset, MapPoint
 from app.services.effect_service import (
     FIX_RULES,
@@ -12,10 +14,20 @@ from app.services.effect_service import (
     describe_fix,
     effect_summary,
     plan_state,
+    target_key,
     validate_plan,
 )
 from app.services.kpi_service import compute_kpis
-from app.services.metric_service import METRICS, Scores, priority, score_all, total_priority, wait_exposure
+from app.services.metric_service import (
+    METRICS,
+    Scores,
+    burden,
+    score_all,
+    score_point,
+    severity,
+    total_burden,
+    unshaded_share,
+)
 
 WORST_N = 10
 
@@ -26,20 +38,25 @@ def _check_metric(metric: str) -> None:
 
 
 def _raw(ds: Dataset, p: MapPoint, s: PointState) -> dict:
-    raw = {"utci_c": round(s.utci, 2), "solar": round(s.solar, 1), "water_dist_m": round(s.water_dist_m, 1)}
+    raw = {
+        "utci_c": round(s.utci, 2),
+        "utci_base_c": round(s.utci_base, 2),
+        "solar": round(s.solar, 1),
+        "water_dist_m": round(s.water_dist_m, 1),
+    }
     if p.kind == "junction":
-        raw.update(wait_s=s.wait_s, shade_pct=s.shade_pct, wait_exposure=round(wait_exposure(ds, s), 4))
+        raw.update(wait_s=s.wait_s, shade_pct=s.shade_pct)
     return raw
 
 
 def _local_impacts(ds: Dataset, current: PointState, proposed: PointState, before: Scores, after: Scores) -> list[dict]:
     measurements = {
         "water": (current.water_dist_m, proposed.water_dist_m, "m"),
-        "sun": (current.solar, proposed.solar, str(ds.assumptions["solar_unit"])),
+        "sun": (current.solar, proposed.solar, ""),
         "heat": (current.utci, proposed.utci, "°C"),
     }
     if round(current.solar, 1) == round(proposed.solar, 1):
-        measurements["sun"] = (100 * wait_exposure(ds, current), 100 * wait_exposure(ds, proposed), "%")
+        measurements["sun"] = (100 * unshaded_share(current), 100 * unshaded_share(proposed), "%")
 
     impacts = []
     for metric in METRICS:
@@ -62,6 +79,8 @@ def static_map_data(ds: Dataset) -> dict:
         "points": [{k: v for k, v in p.raw.items() if k not in ("utm", "mid_utm")} for p in ds.points],
         "fountains": [{"id": f["id"], "location": f["location"], "wgs": f["wgs"]} for f in ds.fountains],
         "context_network": ds.context_network,
+        "parks": ds.parks,
+        "bike_parkings": ds.bike_parkings,
         "catalogue": [
             {
                 **ds.catalogue[fid],
@@ -83,14 +102,21 @@ def static_map_data(ds: Dataset) -> dict:
             {
                 "id": "sun",
                 "label": "Sun exposure",
-                "description": "Real solar exposure of the street; at junctions also the red-light wait in full sun.",
+                "description": "Real solar index of the street (municipal raster, no stated unit), relative to the whole cycle network; at junctions also the shade of the waiting box (the wait itself is the time spent there).",
             },
             {
                 "id": "heat",
                 "label": "Heat stress",
-                "description": f"UTCI felt temperature at 14:00: fine at {a['utci_ok_c']} °C, worst at {a['utci_bad_c']} °C.",
+                "description": f"UTCI felt temperature at {a['heat_reference_hour']}:00 (synthetic per trail, shifted by real local sun): fine at {a['utci_ok_c']} °C, worst at {a['utci_bad_c']} °C.",
             },
-            {"id": "combined", "label": "Combined", "description": "Equal-weight mean of water, sun and heat."},
+            {
+                "id": "combined",
+                "label": "Combined",
+                "description": (
+                    f"Weighted mean: heat {a['weight_heat']}, sun {a['weight_sun']}, water {a['weight_water']} "
+                    "(heat already includes local sun, so sun is not weighted equally)."
+                ),
+            },
         ],
     }
 
@@ -111,13 +137,14 @@ def evaluate(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str, 
                 "id": p.id,
                 "scores": {k: round(v, 4) for k, v in sc.as_dict().items()},
                 "raw": _raw(ds, p, state[p.id]),
-                "priority": round(priority(ds, p, sc.get(metric)), 3),
+                "priority": round(severity(ds, p, sc.get(metric)), 3),
+                "burden": round(burden(ds, p, state[p.id], sc.get(metric)), 4),
             }
         )
     worst = sorted((r for r in rows if r["priority"] > 0), key=lambda r: (-r["priority"], r["id"]))[:WORST_N]
     spent = sum(f.cost_eur for f in plan)
-    burden_before = total_priority(ds, base_scores, metric)
-    burden_now = total_priority(ds, scores, metric)
+    burden_before = total_burden(ds, base, base_scores, metric)
+    burden_now = total_burden(ds, state, scores, metric)
     return {
         "metric": metric,
         "points": rows,
@@ -130,6 +157,7 @@ def evaluate(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str, 
                 "label": FIX_RULES[f.fix_id]["label"],
                 "cost_eur": f.cost_eur,
                 "opex_eur_yr": f.opex_eur_yr,
+                "length_m": f.length_m,
             }
             for f in plan
         ],
@@ -154,9 +182,13 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
     remaining = budget - sum(f.cost_eur for f in plan)
     state = plan_state(ds, accepted)
     scores = score_all(ds, state)
-    burden = total_priority(ds, scores, metric)
+    burden_now = total_burden(ds, state, scores, metric)
     local_before = scores[point_id].get(metric)
-    applied_here = {fid for fid, pid in accepted if pid == point_id}
+    # A linear fix covers the whole street segment, so trees accepted on another piece of it count here too.
+    applied_here = {
+        fid for fid, pid in accepted
+        if fid in FIX_RULES and target_key(ds, fid, ds.points_by_id[pid]) == target_key(ds, fid, point)
+    }
 
     options = []
     for fix_id, rule in FIX_RULES.items():
@@ -171,11 +203,11 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
             continue
         new_state = apply_fix(ds, state, fix_id, point)
         new_scores = score_all(ds, new_state)
-        new_burden = total_priority(ds, new_scores, metric)
-        reduction = burden - new_burden
+        new_burden = total_burden(ds, new_state, new_scores, metric)
+        reduction = burden_now - new_burden
         improves = reduction > 1e-6
         affordable = priced.cost_eur <= remaining + 0.005
-        reduction_pct = reduction / burden * 100 if burden > 0 else 0.0
+        reduction_pct = reduction / burden_now * 100 if burden_now > 0 else 0.0
         options.append(
             {
                 "fix_id": fix_id,
@@ -183,6 +215,7 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
                 "description": ds.catalogue[fix_id]["description"],
                 "status": "available" if improves and affordable else ("over_budget" if improves else "no_effect"),
                 "cost_eur": priced.cost_eur,
+                "length_m": priced.length_m,
                 "opex_eur_yr": priced.opex_eur_yr,
                 "deployment_weeks": ds.catalogue[fix_id]["deployment_weeks"],
                 "effects": effect_summary(ds, fix_id),
@@ -202,3 +235,83 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
         "local_score": round(local_before, 4),
         "options": options,
     }
+
+
+AUTO_PLAN_MAX_STEPS = 200
+
+
+def auto_plan(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str, str]]) -> dict:
+    """Fills the remaining budget greedily by burden reduction per euro (lazy greedy / CELF).
+
+    Candidates are every allowed (fix, place) not yet in the plan; a linear fix is one candidate per real
+    street segment. Each round takes the affordable candidate with the highest reduction per euro of the
+    selected metric's burden. Gains only shrink as the plan grows (cooling stacks with a discount, water
+    distance can only drop, a shorter wait leaves less to shade), so a stale gain is an upper bound and is
+    recomputed only when it reaches the top of the queue. Ranking by gain per euro alone can miss a single
+    large fix, so the result is compared with the best single affordable fix and the better one is
+    returned (the standard safeguard for a greedy under a budget). It is a heuristic, not a proven optimum.
+    """
+    _check_metric(metric)
+    plan = validate_plan(ds, accepted, budget)
+    remaining = budget - sum(f.cost_eur for f in plan)
+    state = plan_state(ds, accepted)
+    scores = score_all(ds, state)
+    taken = {(fid, target_key(ds, fid, ds.points_by_id[pid])) for fid, pid in accepted}
+
+    candidates: dict[tuple[str, str], tuple[str, str, float]] = {}
+    for p in ds.points:
+        for fix_id, rule in FIX_RULES.items():
+            if p.kind not in rule["kinds"]:
+                continue
+            key = (fix_id, target_key(ds, fix_id, p))
+            if key in taken or key in candidates:
+                continue
+            candidates[key] = (fix_id, p.id, describe_fix(ds, fix_id, p).cost_eur)
+
+    def gain(fix_id: str, point_id: str) -> tuple[float, dict]:
+        new_state = apply_fix(ds, state, fix_id, ds.points_by_id[point_id])
+        delta = 0.0
+        for q in ds.points:
+            if new_state[q.id] is not state[q.id]:
+                before = burden(ds, q, state[q.id], scores[q.id].get(metric))
+                after = burden(ds, q, new_state[q.id], score_point(ds, q, new_state[q.id]).get(metric))
+                delta += before - after
+        return delta, new_state
+
+    heap: list[tuple[float, int, tuple[str, str]]] = []
+    best_single: tuple[float, str, str] | None = None  # (gain, fix_id, point_id) of the best lone fix
+    for i, (key, (fix_id, point_id, cost)) in enumerate(candidates.items()):
+        if cost <= remaining + 0.005 and cost > 0:
+            g, _ = gain(fix_id, point_id)
+            if g > 1e-9:
+                heapq.heappush(heap, (-g / cost, i, key))
+                if best_single is None or g > best_single[0]:
+                    best_single = (g, fix_id, point_id)
+
+    added: list[dict] = []
+    greedy_gain = 0.0
+    fresh_round = 0  # candidates whose gain was computed against the current plan carry this stamp
+    stamps: dict[tuple[str, str], int] = {key: 0 for _, _, key in heap}
+    while heap and len(added) < AUTO_PLAN_MAX_STEPS:
+        neg_ratio, i, key = heapq.heappop(heap)
+        fix_id, point_id, cost = candidates[key]
+        if cost > remaining + 0.005:
+            continue  # no longer affordable; costs don't change, so it never will be again
+        if stamps[key] != fresh_round:
+            g, _ = gain(fix_id, point_id)
+            stamps[key] = fresh_round
+            if g > 1e-9:
+                heapq.heappush(heap, (-g / cost, i, key))
+            continue
+        # Fresh and on top: accept it.
+        g, state = gain(fix_id, point_id)
+        scores = score_all(ds, state)
+        remaining -= cost
+        greedy_gain += g
+        added.append({"fix_id": fix_id, "point_id": point_id})
+        fresh_round += 1
+
+    if best_single is not None and best_single[0] > greedy_gain + 1e-9:
+        added = [{"fix_id": best_single[1], "point_id": best_single[2]}]
+
+    return {"added": added, "accepted": [{"fix_id": f, "point_id": p} for f, p in accepted] + added}

@@ -1,0 +1,18 @@
+# Where the synthetic VAS-R1 junctions are placed on the real map.
+# Their synthetic coordinates are 140-850 m off their own trail, so each one is anchored to a REAL
+# feature named in its VAS-R1 name. Points without an anchor fall back to snapping their synthetic
+# coordinate onto their own trail. (Stations are the real AMBici stations; the two VAS-R1 stations are
+# matched to them by `vas_station_match` in assumptions.yaml.)
+#
+#   cross:    the point of the own trail closest to the named other trail (a real crossing when 0 m)
+#   facility: the point of the own trail closest to a municipal facility (exact name + category)
+CRU-01:  # Traffic Light Junction Train Station / Barcelona Rd (TRM-01)
+  cross: TRM-02
+CRU-02:  # Vilamarina / Olof Palme Roundabout Junction (TRM-12)
+  facility: {name: Vilamarina, category: Economia i comerç}
+CRU-03:  # Generalitat Ave / Carretera de la Vila Junction (TRM-10)
+  cross: TRM-01
+CRU-04:  # Can Calderon Estate North Gate Junction (TRM-02)
+  facility: {name: Can Calderon, category: Economia i comerç}
+CRU-05:  # Atrium / Josep Tarradellas Ave Junction (TRM-06)
+  facility: {name: Atrium Viladecans, category: Cultura i Oci}

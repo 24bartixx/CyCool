@@ -25,3 +25,8 @@ def line_geometry() -> Geometry:
 def point_geometry() -> Geometry:
     """Point column; the GiST index is declared explicitly in each model."""
     return Geometry("POINT", srid=SRID, spatial_index=False)
+
+
+def multipolygon_geometry() -> Geometry:
+    """MultiPolygon column; the GiST index is declared explicitly in each model."""
+    return Geometry("MULTIPOLYGON", srid=SRID, spatial_index=False)

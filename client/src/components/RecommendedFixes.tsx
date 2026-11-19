@@ -7,14 +7,14 @@ import ScoreChip from './ScoreChip.tsx'
 
 const METRIC_SUBJECT: Record<MetricId, string> = {
   water: 'water access',
-  sun: 'solar radiation',
+  sun: 'sun exposure',
   heat: 'heat stress',
   combined: 'overall cycling comfort',
 }
 
 const IMPACT_LABEL: Record<MetricId, string> = {
   water: 'Drinking water',
-  sun: 'Solar radiation',
+  sun: 'Solar index',
   heat: 'Temperature',
   combined: 'Combined',
 }
@@ -85,6 +85,11 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">
           <p className="text-sm leading-tight font-semibold">{o.label}</p>
           {best && <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-white">Best value</span>}
+          {(o.length_m ?? 0) > 0 && (
+            <span className="basis-full text-[11px] text-muted" title="Trees and cool pavement are laid along the whole real street segment">
+              Along the whole street segment · {Math.round(o.length_m ?? 0)} m
+            </span>
+          )}
         </div>
         {o.effects.length > 0 && (
           // Effects show on hover, and on keyboard focus for people who can't hover.

@@ -47,6 +47,10 @@
   --color-water: #2a78d6;
   --color-water-soft: #dbe9fa;
   --color-network: #b9b6ac;
+  /* Context layers: parks (OSM outlines) in leaf green, clearly apart from the teal "fine" score; Bicibox bike
+     parkings in charcoal, so they don't read as a score-coloured AMBici station or as water. */
+  --color-park: #4c8c2b;
+  --color-bike-parking: #3f4650;
 
   /* Map selection (lines and marker rings): navy, outside every data colour. Not orange (score ramp), not teal
      ("fine" and the brand). It shares a hue family with --color-water, but is far darker, so a selected line

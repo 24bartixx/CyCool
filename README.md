@@ -14,6 +14,9 @@ React + Tailwind client, FastAPI backend, PostgreSQL + PostGIS, all run with Doc
 | ----------------------------------- | ------------------------------------------------ |
 | `CoolCycle_Viladecans.gpkg`         | Municipal layers and the synthetic VAS-R1 tables |
 | `bike_solar_screen_geojson.geojson` | Solar statistics for each cycle segment          |
+| `osm_parks.geojson`                 | Park outlines from OpenStreetMap (see below)     |
+
+`osm_parks.geojson` holds the `leisure=park` polygons inside the Viladecans boundary, taken from the Overpass API. To refresh it, run `python scripts/fetch_osm_parks.py`. You don't need this for a normal setup. Park data © OpenStreetMap contributors, licensed under the [ODbL](https://www.openstreetmap.org/copyright).
 
 ### 2. Create `.env` and pick a free database port
 
@@ -76,7 +79,7 @@ python -m pip install -r scripts/requirements.txt
 python scripts/export_to_db.py
 ```
 
-A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
+A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities, 41 OSM parks and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
 
 | Command                                         | What it does                                                 |
 | ----------------------------------------------- | ------------------------------------------------------------ |
@@ -155,6 +158,7 @@ backend/alembic/
   versions/                  migration files
 scripts/
   export_to_db.py            seeds the database and computes per-segment metrics
+  fetch_osm_parks.py         one-off: OpenStreetMap park outlines -> data/osm_parks.geojson
   data/                      input data (GeoPackage, GeoJSON)
 client/src/
   theme/colors.css           app colors, the only place to change them

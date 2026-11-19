@@ -11,6 +11,7 @@ import PointDrawer from '../components/PointDrawer.tsx'
 import PointTypeFilter from '../components/PointTypeFilter.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
+import { METRIC_SHORT } from '../lib/icons.tsx'
 import { POINT_KINDS, rankWorst } from '../lib/points.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
@@ -69,7 +70,6 @@ export default function PlannerPage() {
 
   const selected = pl.selectedId ? pl.pointsById.get(pl.selectedId) : undefined
   const worstId = ranked[0]
-  const solarUnit = String(data?.assumptions.find((a) => a.key === 'solar_unit')?.value ?? '')
   const waterReachM = data?.assumptions.find((a) => a.key === 'water_ok_m')?.value
   const strongHeatC = data?.assumptions.find((a) => a.key === 'strong_heat_utci_c')?.value
   const comfortC = data?.assumptions.find((a) => a.key === 'comfortable_utci_c')?.value
@@ -120,7 +120,6 @@ export default function PlannerPage() {
       result={pl.resultsById.get(selected.id)}
       metric={ev?.metric ?? pl.metric}
       isWorst={selected.id === worstId}
-      solarUnit={solarUnit}
       onClose={close}
     >
       {!wide && fixes}
@@ -136,6 +135,10 @@ export default function PlannerPage() {
       onUndo={pl.undo}
       onReset={pl.reset}
       onSelect={select}
+      onAutoPlan={pl.autoPlan}
+      autoPlanning={pl.autoPlanning}
+      metricLabel={METRIC_SHORT[ev.metric]}
+      remaining={ev.budget.remaining}
       busy={pl.evaluating}
     />
   )
