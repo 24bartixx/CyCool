@@ -1,6 +1,7 @@
 import L from "leaflet";
 import { Bike, Droplet, House, Target, TrafficCone } from "lucide-react";
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -181,9 +182,15 @@ function parkTooltip(props: ParkProps): HTMLElement {
   return el;
 }
 
+const badgeCache = new Map<string, L.DivIcon>();
+
+/** Cached like nodeIcon: a new icon object on every render would make each badge swap its DOM element. */
 function fixBadge(fixId: string, slot: number): L.DivIcon {
+  const key = `${fixId}|${slot}`;
+  const hit = badgeCache.get(key);
+  if (hit) return hit;
   const Glyph = FIX_ICON[fixId];
-  return L.divIcon({
+  const icon = L.divIcon({
     html: `<div class="cc-fix-badge${fixId === "INT-03" ? " cc-fix-badge--water" : ""}">${renderToStaticMarkup(
       <Glyph size={12} strokeWidth={2.5} aria-hidden />,
     )}</div>`,
@@ -191,6 +198,8 @@ function fixBadge(fixId: string, slot: number): L.DivIcon {
     iconSize: [22, 22],
     iconAnchor: [11 - slot * 20, 34],
   });
+  badgeCache.set(key, icon);
+  return icon;
 }
 
 const worstRing = L.divIcon({
@@ -577,19 +586,130 @@ function SegmentHighlight({
   );
 }
 
-function pointTooltip(
+/** Pane of the street network's score lines. */
+const TRAILS_PANE = "trails";
+/** Width of the invisible line over each score line that takes its clicks: easier to hit than the 7 px line. */
+const HIT_LINE_PX = 20;
+
+/** A street piece's tooltip as a DOM node (street names are shown as text, never parsed as HTML). */
+function segmentTooltip(
   p: MapPointInfo,
   r: PointResult | undefined,
   metric: MetricId,
-) {
-  return (
-    <Tooltip sticky className="cc-tooltip" direction="top" offset={[0, -8]}>
-      <strong>{pointTitle(p)}</strong>
-      <br />
-      {METRIC_SHORT[metric]} score {r ? dec2(r.scores[metric]) : "…"}
-    </Tooltip>
+): HTMLElement {
+  const el = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = pointTitle(p);
+  el.append(
+    title,
+    document.createElement("br"),
+    `${METRIC_SHORT[metric]} score ${r ? dec2(r.scores[metric]) : "…"}`,
   );
+  return el;
 }
+
+/**
+ * The street network's score lines: the bulk of the map (~1800 pieces, each with a hit line). They are plain Leaflet
+ * layers, not react-leaflet components: as components, every render of the map (a hover in the worst list, a
+ * selection) re-rendered and restyled all ~3600 of them, which froze the page for a moment. Here they are built once
+ * per data load, and only the lines whose colour or width changes are restyled.
+ *
+ * They stay SVG (not canvas, which would draw faster): a canvas takes every pointer event over the whole map, so
+ * the parks and oasis outlines in the panes below would lose their tooltips. Leaflet's SVG lets events through
+ * everywhere except on the (hit) lines.
+ */
+const NetworkLines = memo(function NetworkLines({
+  segments,
+  results,
+  metric,
+  muted,
+  keepId,
+  onSelect,
+}: {
+  segments: readonly MapPointInfo[];
+  results: ReadonlyMap<string, PointResult>;
+  metric: MetricId;
+  /** Street pieces are left out of "Where to look": drawn grey and thinner, still clickable. */
+  muted: boolean;
+  /** The selected piece keeps its colours even when muted (it can be picked from the plan). */
+  keepId?: string;
+  onSelect: (id: string) => void;
+}) {
+  const map = useMap();
+  const lines = useRef(
+    new Map<string, { line: L.Polyline; hit: L.Polyline }>(),
+  );
+  // The click handlers and tooltips are bound once, so they read the current values from here.
+  const live = useRef({ results, metric, onSelect });
+  useLayoutEffect(() => {
+    live.current = { results, metric, onSelect };
+  });
+
+  useEffect(() => {
+    const byId = lines.current;
+    const scoreLines = L.layerGroup();
+    const hitLines = L.layerGroup();
+    for (const p of segments) {
+      const line = L.polyline(p.wgs, {
+        pane: TRAILS_PANE,
+        opacity: 1,
+        lineCap: "butt",
+        interactive: false,
+      });
+      const hit = L.polyline(p.wgs, {
+        pane: TRAILS_PANE,
+        color: "#000",
+        weight: HIT_LINE_PX,
+        opacity: 0,
+        // keep the click off the map, where it would close the details popup it is about to open
+        bubblingMouseEvents: false,
+      });
+      hit.on("click", () => live.current.onSelect(p.id));
+      hit.bindTooltip(
+        () =>
+          segmentTooltip(
+            p,
+            live.current.results.get(p.id),
+            live.current.metric,
+          ),
+        {
+          sticky: true,
+          className: "cc-tooltip",
+          direction: "top",
+          offset: [0, -8],
+        },
+      );
+      scoreLines.addLayer(line);
+      hitLines.addLayer(hit);
+      byId.set(p.id, { line, hit });
+    }
+    // the hit lines after (so above) every score line, or a neighbour's score line would cover them
+    scoreLines.addTo(map);
+    hitLines.addTo(map);
+    return () => {
+      scoreLines.remove();
+      hitLines.remove();
+      byId.clear();
+    };
+  }, [map, segments]);
+
+  // Colours and widths. Also re-run for new `segments`: the lines above were rebuilt with Leaflet's default style.
+  useEffect(() => {
+    const neutral = cssVar("--color-network");
+    for (const [id, { line, hit }] of lines.current) {
+      const r = results.get(id);
+      const off = muted && id !== keepId;
+      const color = r && !off ? scoreColor(r.scores[metric]) : neutral;
+      const weight = off ? MUTED_LANE_PX : LANE_PX;
+      if (line.options.color !== color || line.options.weight !== weight)
+        line.setStyle({ color, weight });
+      // a tooltip open under the pointer shows the new score right away
+      if (hit.isTooltipOpen()) hit.getTooltip()?.update();
+    }
+  }, [segments, results, metric, muted, keepId]);
+
+  return null;
+});
 
 export default function MapView({
   mapData,
@@ -620,10 +740,17 @@ export default function MapView({
     () => L.latLngBounds(mapData.points.flatMap((p) => p.wgs)).pad(0.3),
     [mapData.points],
   );
-  const segments = mapData.points.filter((p) => p.kind === "segment");
-  const nodes = mapData.points.filter(
-    (p): p is MapPointInfo & { kind: "junction" | "station" } =>
-      p.kind !== "segment",
+  const segments = useMemo(
+    () => mapData.points.filter((p) => p.kind === "segment"),
+    [mapData.points],
+  );
+  const nodes = useMemo(
+    () =>
+      mapData.points.filter(
+        (p): p is MapPointInfo & { kind: "junction" | "station" } =>
+          p.kind !== "segment",
+      ),
+    [mapData.points],
   );
   const pointsById = useMemo(
     () => new Map(mapData.points.map((p) => [p.id, p])),
@@ -660,24 +787,6 @@ export default function MapView({
   const selectedCore = selectedResult
     ? scoreColor(selectedResult.scores[metric])
     : neutral;
-
-  const scoreLine = (p: MapPointInfo) => {
-    const r = results.get(p.id);
-    const off = muted(p);
-    return (
-      <Polyline
-        key={p.id}
-        positions={p.wgs}
-        pathOptions={{
-          color: r && !off ? scoreColor(r.scores[metric]) : neutral,
-          weight: off ? MUTED_LANE_PX : LANE_PX,
-          opacity: 1,
-          lineCap: "butt",
-        }}
-        interactive={false}
-      />
-    );
-  };
 
   return (
     <div className="@container relative h-full w-full">
@@ -839,21 +948,15 @@ export default function MapView({
             ))}
         </Pane>
 
-        <Pane name="trails" style={{ zIndex: 410 }}>
-          {segments.map(scoreLine)}
-          {/* wide invisible hit areas: easier to click than the 7 px line */}
-          {segments.map((p) => (
-            <Polyline
-              key={`hit-${p.id}`}
-              positions={p.wgs}
-              pathOptions={{ color: "#000", weight: 20, opacity: 0 }}
-              // keep the click off the map, where it would close the details popup it is about to open
-              bubblingMouseEvents={false}
-              eventHandlers={{ click: () => onSelect(p.id) }}
-            >
-              {pointTooltip(p, results.get(p.id), metric)}
-            </Polyline>
-          ))}
+        <Pane name={TRAILS_PANE} style={{ zIndex: 410 }}>
+          <NetworkLines
+            segments={segments}
+            results={results}
+            metric={metric}
+            muted={!kinds.has("segment")}
+            keepId={selectedId}
+            onSelect={onSelect}
+          />
         </Pane>
 
         {/* Highlights get panes of their own above the lines: Leaflet stacks lines within a pane in the order they

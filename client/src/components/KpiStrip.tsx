@@ -1,4 +1,5 @@
 import { ArrowDown, Info, type LucideIcon } from 'lucide-react'
+import { memo } from 'react'
 import type { Kpis, MetricId } from '../api/planner.ts'
 import { celsius, DASH, dec1, dec2, km } from '../lib/format.ts'
 import { KPI_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
@@ -205,7 +206,7 @@ function TileView({ t, hasPlan }: { t: Tile; hasPlan: boolean }) {
   )
 }
 
-export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM, strongHeatC, comfortC }: Props) {
+function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM, strongHeatC, comfortC }: Props) {
   const hasPlan = fixCount > 0
   return (
     <section aria-label="Impact of your plan vs today" className="shrink-0 border-t border-border bg-surface">
@@ -225,3 +226,6 @@ export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReach
     </section>
   )
 }
+
+// Memoised: the page re-renders on every hover over the worst list; the KPIs only change with the evaluation.
+export default memo(KpiStrip)

@@ -172,7 +172,7 @@ export default function PointDrawer(props: Props) {
                       ? ` (was ${celsius(raw.utci_base_c)})`
                       : "") +
                     (point.utci_source === "computed"
-                      ? ` on a hot afternoon · ${int(100 * (point.sun_share ?? 0))} % direct sun, ground ${celsius(point.ground_temp_c)} (from real weather and Landsat)`
+                      ? " on a hot afternoon"
                       : " · synthetic VAS-R1 value"),
                 },
                 { id: "combined", detail: "Mean of water, sun and heat" },

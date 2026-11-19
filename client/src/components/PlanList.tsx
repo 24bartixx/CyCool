@@ -1,5 +1,5 @@
 import { ClipboardList, MousePointerClick, RotateCcw, Trash2, Undo2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur } from '../lib/format.ts'
 import { FIX_ICON } from '../lib/icons.tsx'
@@ -22,7 +22,7 @@ type Props = {
   busy: boolean
 }
 
-export default function PlanList({
+function PlanList({
   plan,
   pointsById,
   selectedId,
@@ -145,3 +145,6 @@ export default function PlanList({
     </section>
   )
 }
+
+// Memoised: the page re-renders on every hover over the worst list; the plan only changes with the evaluation.
+export default memo(PlanList)

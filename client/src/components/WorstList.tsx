@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import type {
   MapPointInfo,
   MetricId,
@@ -34,7 +34,7 @@ type Props = {
   onHover: (id?: string) => void;
 };
 
-export default function WorstList({
+function WorstList({
   metric,
   ranked,
   pointsById,
@@ -158,3 +158,6 @@ export default function WorstList({
     </section>
   );
 }
+
+// Memoised: the page re-renders on every hover over this list, and with "Show all" it holds ~1800 rows.
+export default memo(WorstList);
