@@ -17,7 +17,7 @@ The planner enters a **budget** and picks a **metric**. The map shows the **wors
 |---|---|---|
 | INT-01 | Shade trees (12 trees per 100 m) | per 100 m of trail |
 | INT-02 | Shade sail at traffic-light waiting box | junctions |
-| INT-03 | Cyclist Oasis (pergola + chilled fountain + mist + bench) | any point. **This is the only water fix** |
+| INT-03 | Cyclist Oasis (pergola + chilled fountain + mist + bench) | trail segments and stations (not junctions). **This is the only water fix** |
 | INT-04 | Cool pavement coating | per 100 m of trail |
 | INT-05 | Heat-triggered green-wave traffic lights | junctions |
 | INT-06 | Solar canopy at bike station | stations EST-B01, EST-B02 |
@@ -48,8 +48,10 @@ Not used:
    - an oasis cools within 25 m and cuts solar by 30%
    - a station canopy cuts solar by 50%
    - "comfortable" means UTCI < 32 °C
+   - "out of very strong heat" means UTCI < 38 °C
 6. **All KPI numbers come from code**, recalculated live from the accepted fixes, never hard-coded:
    - comfortable km
+   - km out of very strong heat (UTCI < 38 °C)
    - °C reduction
    - tCO₂e (sequestration/avoidance of the accepted fixes only)
    - € per km

@@ -1,4 +1,5 @@
 import { RotateCcw, Trash2, Undo2 } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur } from '../lib/format.ts'
 import { FIX_ICON } from '../lib/icons.tsx'
@@ -7,6 +8,13 @@ import { pointTitle } from '../lib/points.ts'
 type Props = {
   plan: Evaluation['plan']
   pointsById: Map<string, MapPointInfo>
+  /** The point picked on the map or in a list: its fixes in the plan are highlighted. */
+  selectedId?: string
+  /**
+   * Scroll the highlighted fixes into view when the selection changes. Only where the plan has a pane of its own:
+   * sharing the sidebar with the worst list, it would scroll the list the planner just clicked away.
+   */
+  revealSelected: boolean
   onRemove: (fixId: string, pointId: string) => void
   onUndo: () => void
   onReset: () => void
@@ -14,7 +22,28 @@ type Props = {
   busy: boolean
 }
 
-export default function PlanList({ plan, pointsById, onRemove, onUndo, onReset, onSelect, busy }: Props) {
+export default function PlanList({
+  plan,
+  pointsById,
+  selectedId,
+  revealSelected,
+  onRemove,
+  onUndo,
+  onReset,
+  onSelect,
+  busy,
+}: Props) {
+  const listRef = useRef<HTMLOListElement>(null)
+  // Also re-run when a fix is added at (or removed from) the selected point, so a newly accepted one shows.
+  const selectedCount = plan.filter((f) => f.point_id === selectedId).length
+  useEffect(() => {
+    if (!revealSelected || !selectedCount) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    listRef.current
+      ?.querySelector('[data-selected]')
+      ?.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
+  }, [revealSelected, selectedId, selectedCount])
+
   return (
     <section aria-labelledby="plan-h" className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -45,17 +74,25 @@ export default function PlanList({ plan, pointsById, onRemove, onUndo, onReset, 
           No fixes yet. Accepted fixes appear here, their cost is taken from the budget and the map updates.
         </p>
       ) : (
-        <ol className="space-y-1">
+        <ol ref={listRef} className="space-y-1">
           {plan.map((f, i) => {
             const Icon = FIX_ICON[f.fix_id]
             const point = pointsById.get(f.point_id)
             const location = point ? pointTitle(point) : f.point_id
+            const active = f.point_id === selectedId
             return (
-              <li key={`${f.fix_id}-${f.point_id}`} className="flex items-center gap-1">
+              <li
+                key={`${f.fix_id}-${f.point_id}`}
+                data-selected={active || undefined}
+                className="flex scroll-my-2 items-center gap-1"
+              >
                 <button
                   type="button"
                   onClick={() => onSelect(f.point_id)}
-                  className="grid min-w-0 flex-1 grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-2"
+                  aria-current={active ? 'true' : undefined}
+                  className={`grid min-w-0 flex-1 grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg border px-2 py-1.5 text-left transition-colors ${
+                    active ? 'border-primary bg-primary-soft' : 'border-transparent hover:border-border hover:bg-surface-2'
+                  }`}
                 >
                   <span className={`grid size-7 place-items-center rounded-full text-white ${f.fix_id === 'INT-03' ? 'bg-water' : 'bg-primary'}`}>
                     <Icon className="size-3.5" aria-hidden />

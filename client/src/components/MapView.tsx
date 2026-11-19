@@ -550,9 +550,9 @@ export default function MapView({
   );
 
   const fixesByPoint = useMemo(() => {
-    const m = new Map<string, string[]>();
+    const m = new Map<string, Evaluation["plan"]>();
     for (const f of evaluation?.plan ?? [])
-      m.set(f.point_id, [...(m.get(f.point_id) ?? []), f.fix_id]);
+      m.set(f.point_id, [...(m.get(f.point_id) ?? []), f]);
     return m;
   }, [evaluation]);
 
@@ -772,15 +772,29 @@ export default function MapView({
         {showPlan &&
           [...fixesByPoint.entries()].flatMap(([pid, fixes]) => {
             const p = pointsById.get(pid);
+            // Clicking a fix selects its point, which also highlights the fix in "Your plan".
             return p
-              ? fixes.map((fid, slot) => (
+              ? fixes.map((f, slot) => (
                   <Marker
-                    key={`fix-${pid}-${fid}`}
+                    key={`fix-${pid}-${f.fix_id}`}
                     position={p.mid_wgs}
-                    icon={fixBadge(fid, slot)}
-                    interactive={false}
+                    icon={fixBadge(f.fix_id, slot)}
+                    eventHandlers={{ click: () => onSelect(pid) }}
+                    keyboard
+                    alt={`${f.label} at ${pointTitle(p)}, in your plan`}
                     zIndexOffset={500}
-                  />
+                  >
+                    <Tooltip
+                      className="cc-tooltip"
+                      direction="top"
+                      // just above the badge (see fixBadge's iconAnchor)
+                      offset={[slot * 20, -36]}
+                    >
+                      <strong>{f.label}</strong>
+                      <br />
+                      In your plan · {pointTitle(p)}
+                    </Tooltip>
+                  </Marker>
                 ))
               : [];
           })}

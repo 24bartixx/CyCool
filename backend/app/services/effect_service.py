@@ -13,7 +13,7 @@ from app.services.dataset import Dataset, MapPoint
 FIX_RULES: dict[str, dict] = {
     "INT-01": {"label": "Shade trees", "kinds": {"segment"}, "linear": True},
     "INT-02": {"label": "Shade sail at waiting box", "kinds": {"junction"}, "linear": False},
-    "INT-03": {"label": "Cyclist oasis", "kinds": {"segment", "junction", "station"}, "linear": False},
+    "INT-03": {"label": "Cyclist oasis", "kinds": {"segment", "station"}, "linear": False},
     "INT-04": {"label": "Cool pavement", "kinds": {"segment"}, "linear": True},
     "INT-05": {"label": "Green-wave traffic lights", "kinds": {"junction"}, "linear": False},
     "INT-06": {"label": "Station solar canopy", "kinds": {"station"}, "linear": False},

@@ -94,7 +94,13 @@ export type PointResult = {
   priority: number
 }
 
-export type NetworkKpis = { trail_km: number; comfortable_km: number; water_reachable_km: number }
+export type NetworkKpis = {
+  trail_km: number
+  comfortable_km: number
+  /** Trail length with UTCI below the "very strong heat stress" threshold (strong_heat_utci_c). */
+  below_strong_heat_km: number
+  water_reachable_km: number
+}
 
 export type Kpis = {
   before: NetworkKpis

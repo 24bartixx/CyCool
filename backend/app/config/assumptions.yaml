@@ -31,6 +31,12 @@
   unit: °C
   source: standard
   note: UTCI above 32 °C is "strong heat stress"; a trail point below it counts as climate-comfortable.
+- key: strong_heat_utci_c
+  label: Very strong heat stress threshold
+  value: 38
+  unit: °C
+  source: standard
+  note: UTCI 38 °C and above is "very strong heat stress"; a trail point below it is at most in strong heat stress.
 - key: solar_unit
   label: Unit of the solar value
   value: W/m²

@@ -18,11 +18,13 @@ def _network_state_kpis(ds: Dataset, state: dict[str, PointState]) -> dict[str, 
     a = ds.assumptions
     segs = [p for p in ds.points if p.kind == "segment"]
     comfortable_m = sum(p.length_m for p in segs if state[p.id].utci < a["comfortable_utci_c"])
+    below_strong_heat_m = sum(p.length_m for p in segs if state[p.id].utci < a["strong_heat_utci_c"])
     water_m = sum(p.length_m for p in segs if state[p.id].water_dist_m <= a["water_ok_m"])
     total_m = sum(p.length_m for p in segs)
     return {
         "trail_km": total_m / 1000,
         "comfortable_km": comfortable_m / 1000,
+        "below_strong_heat_km": below_strong_heat_m / 1000,
         "water_reachable_km": water_m / 1000,
     }
 

@@ -73,6 +73,7 @@ export default function PlannerPage() {
   const worstId = ranked[0]
   const solarUnit = String(data?.assumptions.find((a) => a.key === 'solar_unit')?.value ?? '')
   const waterReachM = data?.assumptions.find((a) => a.key === 'water_ok_m')?.value
+  const strongHeatC = data?.assumptions.find((a) => a.key === 'strong_heat_utci_c')?.value
 
   // These are placed in one of two spots below, depending on the screen width.
   const fixes = data && selected && (
@@ -104,6 +105,8 @@ export default function PlannerPage() {
     <PlanList
       plan={ev.plan}
       pointsById={pl.pointsById}
+      selectedId={pl.selectedId}
+      revealSelected={wide}
       onRemove={pl.remove}
       onUndo={pl.undo}
       onReset={pl.reset}
@@ -217,6 +220,7 @@ export default function PlannerPage() {
               metric={ev?.metric ?? pl.metric}
               fixCount={ev?.plan.length ?? 0}
               waterReachM={typeof waterReachM === 'number' ? waterReachM : undefined}
+              strongHeatC={typeof strongHeatC === 'number' ? strongHeatC : undefined}
             />
           </main>
         </div>

@@ -147,6 +147,15 @@ def test_cooling_a_hot_trail_makes_it_comfortable():
     assert k["eur_per_comfortable_km"] is not None
 
 
+def test_trees_lift_a_very_hot_piece_out_of_very_strong_heat():
+    trail = "TRM-02"  # UTCI 40.1 °C, minus trees 4.5 = 35.6: below 38 but still above 32
+    seg = next(p for p in ds.points if p.kind == "segment" and p.trail_id == trail)
+    k = evaluate(ds, "heat", 1e7, [("INT-01", seg.id)])["kpis"]
+    gain = k["after"]["below_strong_heat_km"] - k["before"]["below_strong_heat_km"]
+    assert gain == pytest.approx(seg.length_m / 1000)
+    assert k["comfortable_km_gain"] == 0
+
+
 def test_api_endpoints():
     assert client.get("/api/map-data").status_code == 200
     ok = client.post("/api/evaluate", json={"metric": "water", "budget": 50000, "accepted": []})

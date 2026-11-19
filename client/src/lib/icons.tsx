@@ -7,6 +7,7 @@ import {
   PaintRoller,
   SunMedium,
   ThermometerSnowflake,
+  ThermometerSun,
   Timer,
   TreeDeciduous,
   Umbrella,
@@ -34,6 +35,7 @@ export const FIX_ICON: Record<string, LucideIcon> = {
 /** KPI strip tiles (the headline burden tile uses METRIC_ICON of the selected metric). */
 export const KPI_ICON = {
   comfort: Bike,
+  heatStress: ThermometerSun,
   water: Droplets,
   cooling: ThermometerSnowflake,
   co2: Leaf,

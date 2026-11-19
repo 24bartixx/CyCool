@@ -42,7 +42,14 @@ type Tile = {
   emphasis?: boolean
 }
 
-type Props = { kpis?: Kpis; burdenPct: number | null; metric: MetricId; fixCount: number; waterReachM?: number }
+type Props = {
+  kpis?: Kpis
+  burdenPct: number | null
+  metric: MetricId
+  fixCount: number
+  waterReachM?: number
+  strongHeatC?: number
+}
 
 const pct = (v: number) => `${dec1(v)}%`
 const share = (part: number, total: number) => (total > 0 ? (part / total) * 100 : 0)
@@ -63,10 +70,12 @@ function coverage(afterKm: number, gainKm: number, totalKm: number, tone: BarTon
   }
 }
 
-function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?: number): Tile[] {
-  const { comfortable_km, trail_km, water_reachable_km } = k.after
+function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?: number, strongHeatC?: number): Tile[] {
+  const { comfortable_km, below_strong_heat_km, trail_km, water_reachable_km } = k.after
   const waterGain = water_reachable_km - k.before.water_reachable_km
+  const strongHeatGain = below_strong_heat_km - k.before.below_strong_heat_km
   const waterDistance = waterReachM == null ? 'the configured distance' : `${waterReachM} m`
+  const strongHeat = strongHeatC == null ? 'the very strong heat threshold' : `${strongHeatC} °C`
   const burdenCut = burdenPct != null && burdenPct >= 0.05
   const cooled = k.utci_drop_trail_avg_c != null
   return [
@@ -87,6 +96,14 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
       ...coverage(comfortable_km, k.comfortable_km_gain, trail_km, 'cool', 'comfortable'),
       sub: `${dec2(comfortable_km)} / ${km(trail_km)} of trails`,
       formula: 'Share of total trail length with UTCI below the comfort threshold (see Data & assumptions).',
+    },
+    {
+      label: 'Out of very strong heat',
+      icon: KPI_ICON.heatStress,
+      tone: 'cool',
+      ...coverage(below_strong_heat_km, strongHeatGain, trail_km, 'cool', `below ${strongHeat}`),
+      sub: `${dec2(below_strong_heat_km)} / ${km(trail_km)} · UTCI below ${strongHeat}`,
+      formula: `Share of total trail length with UTCI below ${strongHeat}: at most "strong heat stress", out of the "very strong heat stress" band. A single fix often moves a hot trail across this line before it reaches the comfort threshold.`,
     },
     {
       label: 'Drinking water nearby',
@@ -189,14 +206,14 @@ function TileView({ t, hasPlan }: { t: Tile; hasPlan: boolean }) {
   )
 }
 
-export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM }: Props) {
+export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM, strongHeatC }: Props) {
   const hasPlan = fixCount > 0
   return (
     <section aria-label="Impact of your plan vs today" className="shrink-0 border-t border-border bg-surface">
       <ul className="flex gap-px overflow-x-auto bg-border">
         {kpis
-          ? tiles(kpis, burdenPct, metric, waterReachM).map((t) => <TileView key={t.label} t={t} hasPlan={hasPlan} />)
-          : Array.from({ length: 5 }, (_, i) => (
+          ? tiles(kpis, burdenPct, metric, waterReachM, strongHeatC).map((t) => <TileView key={t.label} t={t} hasPlan={hasPlan} />)
+          : Array.from({ length: 6 }, (_, i) => (
               <li key={i} className="flex min-w-[180px] flex-1 items-center gap-2.5 bg-surface px-3 py-2.5">
                 <div className="cc-skeleton size-8 rounded-lg" />
                 <div>
