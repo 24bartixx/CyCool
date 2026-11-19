@@ -32,6 +32,8 @@ class SynSegment(Base):
     daily_cyclists_spring: Mapped[int | None]
     daily_cyclists_summer: Mapped[int | None]
     ridership_drop_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    nearest_shelter_id: Mapped[str | None] = mapped_column(Text)  # a syn_point REF-* id (no FK: loaded first)
+    thermal_risk_level: Mapped[str | None] = mapped_column(Text)
 
     source: Mapped[DataSource] = relationship()
     links: Mapped[list[SynSegmentLink]] = relationship(back_populates="syn_segment", passive_deletes=True)

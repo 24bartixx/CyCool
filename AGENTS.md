@@ -39,7 +39,7 @@ Not used:
    - each segment on a trail, with segments over 100 m split into ~50 m pieces
    - the 5 CRU traffic-light junctions and the 2 bike stations (EST-B01/B02), snapped onto their own trail and labelled as approximate locations, because their synthetic coordinates are 140–850 m off
 3. **Data sources:**
-   - **Real (municipal):** segment geometry, length, solar value, fountain locations (`Data/bike_solar_screen_geojson.geojson`, EPSG:25831). Cemetery fountains are excluded.
+   - **Real (municipal):** segment geometry, length, solar value, fountain locations (`scripts/data/`, EPSG:25831, seeded into PostGIS). Cemetery fountains are excluded.
    - **Synthetic (VAS-R1):** temperature/UTCI, junctions, shelters, catalogue costs and effects.
 4. **The VAS-R1 dataset is synthetic.** Never present it as real Viladecans data, and show a "synthetic/demo data" label in the UI.
 5. **Every assumption lives in `backend/app/config/assumptions.yaml`** with a short justification, so the KPIs recalculate when an assumption changes. Current assumptions:
@@ -57,10 +57,10 @@ Not used:
 
 # Prototype architecture
 
-- `scripts/build_dataset.py` turns `../Data` into `backend/app/data/*.json`: trail pieces, junctions, stations, fountains, catalogue and `build_report.json`. Re-run it when the data or `scripts/trail_mapping.yaml` changes.
-- The backend keeps all domain logic in memory: `services/{dataset,effect_service,metric_service,kpi_service,planner_service}.py`. **The API is stateless**: the client sends the list of accepted fixes and the server recomputes from the baseline, so undo is just dropping the last item. PostGIS is only used by `/api/health` for now.
+- `scripts/export_to_db.py` seeds PostGIS from `scripts/data` (the GeoPackage and the solar GeoJSON): real network, fountains, VAS-R1 trails/points/catalogue, and the trail→street links from `scripts/trail_mapping.yaml`. Re-run it when the data or the mapping changes, then restart the backend. Schema changes go through Alembic (`backend/alembic`).
+- The backend keeps all domain logic in memory: `services/{dataset,effect_service,metric_service,kpi_service,planner_service}.py`. **The API is stateless**: the client sends the list of accepted fixes and the server recomputes from the baseline, so undo is just dropping the last item. `services/dataset.py` loads the dataset from PostGIS once per process: splitting into ~50 m pieces, snapping junctions/stations, fountain distances and WGS84 transforms happen in SQL.
 - Endpoints:
   - `GET /api/map-data`
   - `POST /api/evaluate`
   - `POST /api/recommend`
-- Tests: `cd backend && pip install -r requirements-dev.txt && python -m pytest`.
+- Tests: `cd backend && pip install -r requirements-dev.txt && python -m pytest`. They need the seeded database running (`docker compose up db`).

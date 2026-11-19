@@ -76,7 +76,7 @@ python -m pip install -r scripts/requirements.txt
 python scripts/export_to_db.py
 ```
 
-A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities and the synthetic tables, with all 14 synthetic routes linked.
+A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
 
 | Command                                         | What it does                                                     |
 | ----------------------------------------------- | ---------------------------------------------------------------- |
