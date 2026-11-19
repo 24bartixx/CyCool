@@ -81,6 +81,7 @@ def static_map_data(ds: Dataset) -> dict:
         "context_network": ds.context_network,
         "parks": ds.parks,
         "bike_parkings": ds.bike_parkings,
+        "surface_temp": ds.surface_temp,
         "catalogue": [
             {
                 **ds.catalogue[fid],

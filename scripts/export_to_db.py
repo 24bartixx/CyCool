@@ -2,6 +2,7 @@
 
 Loads the municipal layers and the synthetic VAS-R1 tables from CoolCycle_Viladecans.gpkg,
 the OpenStreetMap park outlines from osm_parks.geojson (made by fetch_osm_parks.py),
+the Landsat summer surface temperature per segment from landsat_lst_segments.json (made by fetch_landsat_lst.py),
 the per-segment solar statistics from bike_solar_screen_geojson.geojson, then computes
 segment_metrics in PostGIS (nearest fountain / AMBici / facility distances, rider counts).
 
@@ -46,6 +47,7 @@ GPKG_NAME = "CoolCycle_Viladecans.gpkg"
 TRAIL_MAPPING_FILE = SCRIPTS_DIR / "trail_mapping.yaml"
 SOLAR_GEOJSON_NAME = "bike_solar_screen_geojson.geojson"
 OSM_PARKS_NAME = "osm_parks.geojson"
+LANDSAT_LST_NAME = "landsat_lst_segments.json"
 
 DATA_SOURCES = [
     {
@@ -75,6 +77,13 @@ DATA_SOURCES = [
         "name": "OpenStreetMap leisure=park polygons (© OpenStreetMap contributors, ODbL)",
         "url": "https://www.openstreetmap.org/copyright",
         "notes": f"Fetched with scripts/fetch_osm_parks.py into {OSM_PARKS_NAME}",
+    },
+    {
+        "code": "landsat_lst",
+        "origin": "external",
+        "name": "Landsat 8/9 Collection 2 Level-2 surface temperature (USGS, public domain)",
+        "url": "https://www.usgs.gov/landsat-missions/landsat-collection-2-surface-temperature",
+        "notes": f"Summer median per segment, fetched with scripts/fetch_landsat_lst.py into {LANDSAT_LST_NAME}",
     },
     {
         "code": "vas_r1_synthetic",
@@ -401,6 +410,19 @@ def aggregate_solar(cur: psycopg.Cursor, geojson_path: Path) -> None:
     print(f"  {'segment_metrics':<20} {len(rows):>5} rows (solar), {missing} segments without solar values")
 
 
+def aggregate_lst(cur: psycopg.Cursor, json_path: Path) -> None:
+    """Landsat summer land surface temperature per segment (display only)."""
+    values = json.loads(json_path.read_text(encoding="utf-8"))["segments"]
+    cur.execute("UPDATE segment_metrics SET lst_summer_c = NULL")
+    cur.executemany(
+        "UPDATE segment_metrics SET lst_summer_c = %s WHERE segment_id = %s",
+        [(v, int(k)) for k, v in values.items()],
+    )
+    cur.execute("SELECT count(*) FROM segment_metrics WHERE lst_summer_c IS NULL")
+    missing = cur.fetchone()[0]
+    print(f"  {'segment_metrics':<20} {len(values):>5} rows (Landsat LST), {missing} segments without LST")
+
+
 def aggregate_cyclists(cur: psycopg.Cursor) -> None:
     """Riders per segment: synthetic value on matched streets, class median elsewhere (cycle lanes only)."""
     cur.execute("UPDATE segment_metrics SET daily_cyclists_summer = NULL, cyclists_source = NULL")
@@ -444,7 +466,8 @@ def run(data_dir: Path, reset: bool) -> None:
     gpkg_path = data_dir / GPKG_NAME
     solar_path = data_dir / SOLAR_GEOJSON_NAME
     parks_path = data_dir / OSM_PARKS_NAME
-    for path in (gpkg_path, solar_path, parks_path):
+    lst_path = data_dir / LANDSAT_LST_NAME
+    for path in (gpkg_path, solar_path, parks_path, lst_path):
         if not path.is_file():
             sys.exit(f"Missing input file: {path}")
 
@@ -467,6 +490,7 @@ def run(data_dir: Path, reset: bool) -> None:
         print("Aggregating")
         aggregate_distances(cur)
         aggregate_solar(cur, solar_path)
+        aggregate_lst(cur, lst_path)
         aggregate_cyclists(cur)
     gpkg.close()
     print("Done")

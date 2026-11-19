@@ -47,6 +47,8 @@ class SegmentMetrics(Base):
     solar_valid_coverage: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
     solar_valid_pixels: Mapped[int | None]
     solar_class: Mapped[str | None] = mapped_column(Text)
+    # Landsat 8/9 summer land surface temperature (°C, ~10:30); display only, never used in scores.
+    lst_summer_c: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     daily_cyclists_summer: Mapped[int | None]
     cyclists_source: Mapped[str | None] = mapped_column(Text)
 

@@ -44,7 +44,8 @@ The planner enters a **budget** and picks a **metric**. The map shows the **wors
 3. **Data sources:**
    - **Real (municipal):** segment geometry, length, solar index, fountain locations, AMBici stations, facilities (`scripts/data/`, EPSG:25831, seeded into PostGIS). Cemetery fountains are excluded.
    - **External (OpenStreetMap, ODbL):** park outlines (`leisure=park`), fetched once by `scripts/fetch_osm_parks.py` into `scripts/data/osm_parks.geojson` and seeded into `osm_park`.
-   - **Display-only map layers** (they never change scores or KPIs): parks (OSM) and the 10 Bicibox bike parkings (municipal facilities `Transport / Estacions Bicibox`).
+   - **External (Landsat 8/9, USGS, public domain):** summer land surface temperature (ST_B10, per-pixel median of clear July–August 2023–2025 scenes at ~10:30, via Microsoft Planetary Computer), sampled per real segment by `scripts/fetch_landsat_lst.py` into `scripts/data/landsat_lst_segments.json` and seeded into `segment_metrics.lst_summer_c`. It is ground surface temperature, not air temperature or UTCI. Not shown on the map; `/api/map-data` returns it as `surface_temp`, and it never changes scores or KPIs.
+   - **Display-only map layers** (they never change scores or KPIs): parks (OSM), the 10 Bicibox bike parkings (municipal facilities `Transport / Estacions Bicibox`).
    - **Synthetic (VAS-R1):** temperature/UTCI, rider counts, hourly profile, junctions, shelters, catalogue costs and effects.
 4. **The VAS-R1 dataset is synthetic.** Never present it as real Viladecans data, and show a "synthetic/demo data" label in the UI.
 5. **Every assumption lives in `backend/app/config/assumptions.yaml`** with a short justification, so the KPIs recalculate when an assumption changes. Current assumptions:
