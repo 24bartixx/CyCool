@@ -10,8 +10,8 @@ export function pointTitle(p: MapPointInfo): string {
 }
 
 export function pointSubtitle(p: MapPointInfo, trail?: Trail): string {
-  const where = trail ? `${trail.id} · ${trail.name}` : p.trail_id
-  return p.kind === 'segment' ? `${where} · segment ${p.id}` : where
+  const parts = [trail?.name, p.kind === 'segment' ? `segment ${p.id}` : undefined]
+  return parts.filter(Boolean).join(' · ')
 }
 
 export const METRIC_UNIT_HINT: Record<MetricId, string> = {

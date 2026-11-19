@@ -148,11 +148,8 @@ export default function WorstList({
                     <span className="block truncate text-sm font-medium">
                       {pointTitle(p)}
                     </span>
-                    <span className="flex items-center gap-2 overflow-hidden whitespace-nowrap text-[11px] text-muted">
-                      <span>{p.trail_id}</span>
-                      {p.kind !== "segment" && (
-                        <span>{KIND_SHORT[p.kind]}</span>
-                      )}
+                    <span className="block truncate text-[11px] text-muted">
+                      {KIND_SHORT[p.kind]}
                     </span>
                     <span
                       className="mt-1 block h-1 overflow-hidden rounded-full bg-border"

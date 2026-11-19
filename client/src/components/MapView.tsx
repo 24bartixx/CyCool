@@ -169,8 +169,9 @@ function mapObstacles(map: L.Map): Box[] {
   const els =
     map
       .getContainer()
-      .parentElement?.querySelectorAll("[data-map-overlay], .leaflet-control") ??
-    [];
+      .parentElement?.querySelectorAll(
+        "[data-map-overlay], .leaflet-control",
+      ) ?? [];
   return Array.from(els, (el) => el.getBoundingClientRect())
     .filter((r) => r.width > 0 && r.height > 0)
     .map((r) => ({
@@ -206,7 +207,10 @@ function placePoint(
   ];
   const ys = [
     y0,
-    ...obstacles.flatMap((o) => [o.bottom + m + pop.above, o.top - m - own.bottom]),
+    ...obstacles.flatMap((o) => [
+      o.bottom + m + pop.above,
+      o.top - m - own.bottom,
+    ]),
   ];
 
   let best = { cost: Infinity, at: L.point(x0, y0) };
@@ -479,8 +483,7 @@ function pointTooltip(
     <Tooltip sticky className="cc-tooltip" direction="top" offset={[0, -8]}>
       <strong>{pointTitle(p)}</strong>
       <br />
-      {p.trail_id} · {METRIC_SHORT[metric]} score{" "}
-      {r ? dec2(r.scores[metric]) : "…"}
+      {METRIC_SHORT[metric]} score {r ? dec2(r.scores[metric]) : "…"}
     </Tooltip>
   );
 }
@@ -499,6 +502,7 @@ export default function MapView({
 }: Props) {
   const popupRef = useRef<L.Popup>(null);
   const [map, setMap] = useState<L.Map | null>(null);
+  const [showPlan, setShowPlan] = useState(true);
   const [showContext, setShowContext] = useState(true);
   const [showFountains, setShowFountains] = useState(true);
   const [showReach, setShowReach] = useState(false);
@@ -627,21 +631,22 @@ export default function MapView({
                 }}
               />
             ))}
-          {evaluation?.oases.map((o) => (
-            <Circle
-              key={`oasis-${o.point_id}`}
-              center={o.wgs}
-              radius={waterOk}
-              interactive={false}
-              pathOptions={{
-                color: water,
-                weight: 1.5,
-                dashArray: "4 4",
-                fillColor: water,
-                fillOpacity: 0.08,
-              }}
-            />
-          ))}
+          {showPlan &&
+            evaluation?.oases.map((o) => (
+              <Circle
+                key={`oasis-${o.point_id}`}
+                center={o.wgs}
+                radius={waterOk}
+                interactive={false}
+                pathOptions={{
+                  color: water,
+                  weight: 1.5,
+                  dashArray: "4 4",
+                  fillColor: water,
+                  fillOpacity: 0.08,
+                }}
+              />
+            ))}
         </Pane>
 
         <Pane name="trails" style={{ zIndex: 410 }}>
@@ -732,8 +737,7 @@ export default function MapView({
               <Tooltip className="cc-tooltip" direction="top" offset={[0, -14]}>
                 <strong>{pointTitle(p)}</strong>
                 <br />
-                {p.trail_id} · {METRIC_SHORT[metric]} score{" "}
-                {r ? dec2(r.scores[metric]) : "…"}
+                {METRIC_SHORT[metric]} score {r ? dec2(r.scores[metric]) : "…"}
                 <br />
                 <span style={{ color: "var(--color-warning)" }}>
                   Approximate location (synthetic, moved{" "}
@@ -744,20 +748,21 @@ export default function MapView({
           );
         })}
 
-        {[...fixesByPoint.entries()].flatMap(([pid, fixes]) => {
-          const p = pointsById.get(pid);
-          return p
-            ? fixes.map((fid, slot) => (
-                <Marker
-                  key={`fix-${pid}-${fid}`}
-                  position={p.mid_wgs}
-                  icon={fixBadge(fid, slot)}
-                  interactive={false}
-                  zIndexOffset={500}
-                />
-              ))
-            : [];
-        })}
+        {showPlan &&
+          [...fixesByPoint.entries()].flatMap(([pid, fixes]) => {
+            const p = pointsById.get(pid);
+            return p
+              ? fixes.map((fid, slot) => (
+                  <Marker
+                    key={`fix-${pid}-${fid}`}
+                    position={p.mid_wgs}
+                    icon={fixBadge(fid, slot)}
+                    interactive={false}
+                    zIndexOffset={500}
+                  />
+                ))
+              : [];
+          })}
 
         {worstPoint && (
           <Marker
@@ -801,9 +806,17 @@ export default function MapView({
       )}
 
       {/* layer toggles */}
-      <fieldset data-map-overlay className="absolute right-3 top-3 z-[1000] hidden rounded-xl border border-border bg-surface/95 px-3 py-2 text-xs shadow-sm backdrop-blur md:block">
+      <fieldset
+        data-map-overlay
+        className="absolute right-3 top-3 z-[1000] hidden rounded-xl border border-border bg-surface/95 px-3 py-2 text-xs shadow-sm backdrop-blur md:block"
+      >
         <legend className="sr-only">Map layers</legend>
         {[
+          {
+            label: "Fixes in the plan",
+            checked: showPlan,
+            set: setShowPlan,
+          },
           {
             label: "Drinking fountains",
             checked: showFountains,

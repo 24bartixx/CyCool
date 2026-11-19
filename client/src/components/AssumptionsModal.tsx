@@ -54,7 +54,7 @@ export default function AssumptionsModal({ open, onClose, data }: { open: boolea
             </li>
             <li>
               <strong className="text-foreground">Scope:</strong> {data.trails.length} VAS-R1 trails mapped onto real streets by name ({trailKm.toFixed(1)} km). The
-              Agrarian Path (TRM-13) has no matching street and is left out. Junctions and stations are placed on their own trail (approximate location).
+              Agrarian Path has no matching street and is left out. Junctions and stations are placed on their own trail (approximate location).
             </li>
           </ul>
         </section>
