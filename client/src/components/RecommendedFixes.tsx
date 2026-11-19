@@ -52,11 +52,11 @@ function ImpactRow({ impact }: { impact: FixImpact }) {
       </dt>
       <dd className="col-span-3 grid grid-cols-subgrid items-center text-right font-medium tabular-nums @max-[14rem]:col-start-2">
         <span className="whitespace-nowrap">
-          {measurement ? `${dec1(measurement.before)} ${measurement.unit}` : <ScoreChip score={before} />}
+          {measurement ? `${dec1(measurement.before)} ${measurement.unit}` : <ScoreChip score={before} metric={metric} />}
         </span>
         <ArrowRight className="size-3 text-muted" aria-label="to" />
         <span className="whitespace-nowrap">
-          {measurement ? `${dec1(measurement.after)} ${measurement.unit}` : <ScoreChip score={after} />}
+          {measurement ? `${dec1(measurement.after)} ${measurement.unit}` : <ScoreChip score={after} metric={metric} />}
         </span>
       </dd>
     </div>

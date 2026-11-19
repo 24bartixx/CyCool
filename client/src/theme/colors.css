@@ -4,8 +4,11 @@
  * Every `--color-<name>` token becomes a Tailwind utility (bg-<name>, text-<name>, border-<name>/50 ...)
  * and a plain CSS variable (var(--color-<name>)). The map reads the score ramp from these variables too.
  *
- * Score ramp: one hue (orange), light -> dark, 5 ordinal classes. Validated with the dataviz
- * validator (--ordinal): monotone lightness, visible step gaps, light end >= 2:1 on the map surface.
+ * Score ramp: 5 ordinal classes, green -> amber -> orange -> rust -> brown (low -> worst). The classes are
+ * percentiles of today's network per metric (lib/scale.ts), so most of the map reads green or amber and brown
+ * marks the worst spots. Checked with the dataviz validator (--ordinal, surface #f4f3ef): monotone lightness,
+ * steps >= 0.06 apart, light end 2.2:1 on the surface. Its one-hue check fails on purpose (the hue walks from
+ * green to brown); lightness alone still orders the classes for colour-blind readers.
  * "score-fine" (cool teal) marks points with a score of ~0 (nothing to fix).
  */
 @theme static {
@@ -37,11 +40,11 @@
 
   /* Data: score ramp (0 = fine ... 1 = worst) */
   --color-score-fine: #4f9a94;
-  --color-score-1: #eb9a4f;
-  --color-score-2: #de7a2e;
-  --color-score-3: #c4581b;
-  --color-score-4: #9c3c12;
-  --color-score-5: #6e270c;
+  --color-score-1: #7ab557;
+  --color-score-2: #bd7d00;
+  --color-score-3: #ba5702;
+  --color-score-4: #983e1b;
+  --color-score-5: #682d18;
 
   /* Data: water and context */
   --color-water: #2a78d6;

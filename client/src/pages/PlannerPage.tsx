@@ -12,6 +12,7 @@ import PointTypeFilter from '../components/PointTypeFilter.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
 import { POINT_KINDS, rankWorst } from '../lib/points.ts'
+import { ScoreBreaksContext } from '../lib/scale.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
 
@@ -139,7 +140,7 @@ export default function PlannerPage() {
   )
 
   return (
-    <>
+    <ScoreBreaksContext value={pl.scoreBreaks}>
       <AppHeader onExport={exportPdf} exportBlockedReason={exportBlockedReason} exporting={exporting} exportFailed={exportFailed} />
 
       {pl.mapData.error ? (
@@ -249,6 +250,6 @@ export default function PlannerPage() {
           </main>
         </div>
       )}
-    </>
+    </ScoreBreaksContext>
   )
 }
