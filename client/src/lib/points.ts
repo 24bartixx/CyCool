@@ -1,4 +1,6 @@
-import type { MapPointInfo, MetricId, Trail } from '../api/planner.ts'
+import type { MapPointInfo, MetricId, PointKind, Trail } from '../api/planner.ts'
+
+export const POINT_KINDS: readonly PointKind[] = ['segment', 'junction', 'station']
 
 export const KIND_LABEL = { segment: 'Trail piece', junction: 'Traffic-light junction', station: 'Bike station' } as const
 export const KIND_SHORT = { segment: 'Trail', junction: 'Junction', station: 'Station' } as const

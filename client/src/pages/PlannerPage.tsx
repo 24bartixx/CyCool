@@ -1,5 +1,6 @@
 import { RefreshCw, TriangleAlert, X } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import type { PointKind } from '../api/planner.ts'
 import AppHeader from '../components/AppHeader.tsx'
 import AssumptionsModal from '../components/AssumptionsModal.tsx'
 import BudgetPanel from '../components/BudgetPanel.tsx'
@@ -8,8 +9,10 @@ import MapView from '../components/MapView.tsx'
 import MetricPicker from '../components/MetricPicker.tsx'
 import PlanList from '../components/PlanList.tsx'
 import PointDrawer from '../components/PointDrawer.tsx'
+import PointTypeFilter from '../components/PointTypeFilter.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
+import { POINT_KINDS } from '../lib/points.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
 
@@ -51,6 +54,17 @@ export default function PlannerPage() {
     },
     [setSelectedId],
   )
+
+  // "Where to look": which point kinds the worst list shows. All on by default.
+  const [kinds, setKinds] = useState<Set<PointKind>>(() => new Set(POINT_KINDS))
+  const kindCounts = useMemo(() => {
+    const counts: Record<PointKind, number> = { segment: 0, junction: 0, station: 0 }
+    for (const r of ev?.points ?? []) {
+      const kind = pl.pointsById.get(r.id)?.kind
+      if (r.priority > 0 && kind) counts[kind] += 1
+    }
+    return counts
+  }, [ev?.points, pl.pointsById])
 
   const selected = pl.selectedId ? pl.pointsById.get(pl.selectedId) : undefined
   const worstId = ev?.worst[0]
@@ -126,11 +140,13 @@ export default function PlannerPage() {
               <div className="space-y-6 p-4">
                 <BudgetPanel key={ev.budget.total} budget={ev.budget.total} spent={ev.budget.spent} onChange={pl.setBudget} />
                 <MetricPicker metrics={data.metrics} value={pl.metric} onChange={pl.setMetric} />
+                <PointTypeFilter value={kinds} counts={kindCounts} onChange={setKinds} />
                 <WorstList
                   metric={ev.metric}
                   points={ev.points}
                   pointsById={pl.pointsById}
                   resultsById={pl.resultsById}
+                  kinds={kinds}
                   selectedId={pl.selectedId}
                   onSelect={select}
                   onHover={setHoveredId}

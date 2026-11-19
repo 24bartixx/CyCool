@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import type { MapPointInfo, MetricId, PointResult } from "../api/planner.ts";
+import type {
+  MapPointInfo,
+  MetricId,
+  PointKind,
+  PointResult,
+} from "../api/planner.ts";
 import { KIND_SHORT, pointTitle } from "../lib/points.ts";
 import ScoreChip from "./ScoreChip.tsx";
 
@@ -22,6 +27,8 @@ type Props = {
   points: PointResult[];
   pointsById: Map<string, MapPointInfo>;
   resultsById: Map<string, PointResult>;
+  /** Point kinds to list (the "Where to look" filter). */
+  kinds: ReadonlySet<PointKind>;
   selectedId?: string;
   onSelect: (id: string) => void;
   onHover: (id?: string) => void;
@@ -32,6 +39,7 @@ export default function WorstList({
   points,
   pointsById,
   resultsById,
+  kinds,
   selectedId,
   onSelect,
   onHover,
@@ -41,13 +49,16 @@ export default function WorstList({
   const ranked = useMemo(
     () =>
       points
-        .filter((r) => r.priority > 0)
+        .filter((r) => {
+          const kind = pointsById.get(r.id)?.kind;
+          return r.priority > 0 && kind !== undefined && kinds.has(kind);
+        })
         .sort(
           (a, b) =>
             b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
         )
         .map((r) => r.id),
-    [points],
+    [points, pointsById, kinds],
   );
   const worst = ranked.slice(0, limit);
   const top = worst.length ? (resultsById.get(worst[0])?.priority ?? 0) : 0;
@@ -68,7 +79,7 @@ export default function WorstList({
           className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted"
         >
           <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-[11px] text-primary-foreground">
-            3
+            4
           </span>
           <span className="truncate">Worst points</span>
         </h2>
@@ -97,7 +108,9 @@ export default function WorstList({
       </div>
       {worst.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border-strong p-3 text-sm text-muted">
-          Nothing left to improve for this metric on the trails.
+          {kinds.size === 0
+            ? "Pick at least one point type above to list worst points."
+            : "Nothing left to improve for this metric on the selected point types."}
         </p>
       ) : (
         <ol className="space-y-1">
