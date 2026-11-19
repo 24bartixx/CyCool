@@ -110,11 +110,11 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
       formula: `Share of the whole network's length with UTCI below ${strongHeat}: at most "strong heat stress", out of the "very strong heat stress" band.`,
     },
     {
-      label: 'Drinking water nearby',
+      label: waterReachM == null ? 'Drinking water nearby' : `Drinking water within ${waterReachM} m`,
       icon: KPI_ICON.water,
       tone: 'water',
       ...coverage(water_reachable_km, waterGain, network_km, 'water', 'with water nearby'),
-      sub: `${dec2(water_reachable_km)} / ${km(network_km)} · within ${waterDistance}`,
+      sub: `${dec2(water_reachable_km)} / ${km(network_km)}`,
       formula: `A street piece counts if any part is within ${waterDistance} of a drinking fountain or cyclist oasis in a straight line.`,
     },
     {
@@ -136,7 +136,7 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
       icon: KPI_ICON.co2,
       tone: 'neutral',
       value: `${k.co2_t_per_year > 0 ? '+' : ''}${dec2(k.co2_t_per_year)} t/yr`,
-      sub: `${dec2(k.co2_trips_t_per_year)} t replaced car trips · ${dec2(k.co2_sequestration_t_per_year)} t trees & oases · ${dec2(k.co2_pv_avoided_t_per_year)} t solar canopies`,
+      sub: 'From trees, oases and solar canopies',
       formula:
         'Replaced trips: recovered trips/day × share that replace a car × kg CO₂ per car trip (INT-08) × summer days. Plus CO₂ captured by trees and oasis greenery, and CO₂ avoided by the solar power of station canopies (shown separately).',
     },
