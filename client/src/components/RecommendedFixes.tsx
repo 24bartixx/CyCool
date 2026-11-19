@@ -1,8 +1,8 @@
-import { ArrowRight, Check, CircleCheck, Info, LoaderCircle, TriangleAlert } from 'lucide-react'
+import { ArrowRight, Check, CircleCheck, Info, LoaderCircle, Thermometer, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
 import type { FixImpact, FixOption, MapPointInfo, MetricId, Recommendation } from '../api/planner.ts'
 import { dec1, dec2, eur } from '../lib/format.ts'
-import { FIX_ICON, METRIC_SHORT } from '../lib/icons.tsx'
+import { FIX_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 import ScoreChip from './ScoreChip.tsx'
 
 const METRIC_SUBJECT: Record<MetricId, string> = {
@@ -19,6 +19,13 @@ const IMPACT_LABEL: Record<MetricId, string> = {
   combined: 'Combined',
 }
 
+const IMPACT_ICON_STYLE: Record<MetricId, string> = {
+  water: 'bg-water-soft text-water',
+  sun: 'bg-warning-soft text-warning',
+  heat: 'bg-danger-soft text-danger',
+  combined: 'bg-surface text-primary',
+}
+
 type Props = {
   point: MapPointInfo
   metric: MetricId
@@ -32,14 +39,25 @@ function ImpactRow({ impact }: { impact: FixImpact }) {
   const { metric, before, after } = impact
   const measurement = dec2(before) === dec2(after) ? impact.measurement : undefined
   const label = metric === 'sun' && measurement?.unit === '%' ? 'Red-light sun exposure' : IMPACT_LABEL[metric]
+  const Icon = metric === 'heat' ? Thermometer : METRIC_ICON[metric]
+  const combined = metric === 'combined'
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-      <dt className="text-[11px] text-muted">{label}</dt>
-      <dd className="flex items-center gap-1 font-medium tabular-nums">
-        {measurement ? <span>{dec1(measurement.before)} {measurement.unit}</span> : <ScoreChip score={before} />}
-        <ArrowRight className="size-3 shrink-0 text-muted" aria-label="to" />
-        {measurement ? <span>{dec1(measurement.after)} {measurement.unit}</span> : <ScoreChip score={after} />}
+    <div className={`col-span-full grid grid-cols-subgrid items-center rounded-lg px-1 py-1 ${combined ? 'mb-1 bg-primary-soft' : ''}`}>
+      <dt className={`flex min-w-0 items-center gap-1.5 @max-[14rem]:col-span-full ${combined ? 'font-semibold text-primary' : 'font-medium text-muted'}`}>
+        <span className={`grid size-5 shrink-0 place-items-center rounded-md ${IMPACT_ICON_STYLE[metric]}`}>
+          <Icon className="size-3.5" aria-hidden />
+        </span>
+        <span className="wrap-anywhere">{label}</span>
+      </dt>
+      <dd className="col-span-3 grid grid-cols-subgrid items-center text-right font-medium tabular-nums @max-[14rem]:col-start-2">
+        <span className="whitespace-nowrap">
+          {measurement ? `${dec1(measurement.before)} ${measurement.unit}` : <ScoreChip score={before} />}
+        </span>
+        <ArrowRight className="size-3 text-muted" aria-label="to" />
+        <span className="whitespace-nowrap">
+          {measurement ? `${dec1(measurement.after)} ${measurement.unit}` : <ScoreChip score={after} />}
+        </span>
       </dd>
     </div>
   )
@@ -52,10 +70,12 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
   const localImpacts: FixImpact[] = o.local_impacts ?? (
     o.local_before != null && o.local_after != null ? [{ metric, before: o.local_before, after: o.local_after }] : []
   )
-  const impacts = localImpacts.filter((impact) =>
-    (impact.metric !== 'combined' || metric === 'combined') &&
-    (impact.measurement || dec2(impact.before) !== dec2(impact.after)),
-  )
+  const impacts = localImpacts
+    .filter((impact) =>
+      (impact.metric !== 'combined' || metric === 'combined') &&
+      (impact.measurement || dec2(impact.before) !== dec2(impact.after)),
+    )
+    .sort((a, b) => Number(b.metric === 'combined') - Number(a.metric === 'combined'))
   return (
     <li className={`rounded-xl border bg-surface px-3 py-4 ${best ? 'border-primary shadow-sm ring-1 ring-primary/20' : 'border-border'}`}>
       <div className="flex items-center gap-2">
@@ -92,7 +112,7 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
         )}
       </div>
       {impacts.length > 0 && (
-        <dl aria-label="Changes at this point" className="mt-3.5 space-y-1.5 text-xs leading-tight">
+        <dl aria-label="Changes at this point" className="@container mt-3.5 grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-1 text-xs leading-tight">
           {impacts.map((impact) => <ImpactRow key={impact.metric} impact={impact} />)}
         </dl>
       )}
@@ -122,6 +142,7 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
 }
 
 export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy, onAccept }: Props) {
+  const MetricIcon = METRIC_ICON[metric]
   const options = rec.data?.point_id === point.id ? rec.data.options : undefined
   const useful = options?.filter((o) => o.status === 'available' || o.status === 'over_budget' || o.status === 'applied') ?? []
   const noEffect = options?.filter((o) => o.status === 'no_effect') ?? []
@@ -129,14 +150,20 @@ export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy
 
   return (
     <section aria-labelledby="recs-h" aria-busy={rec.loading}>
-      <div className="mb-2">
+      <div className="mb-4">
         <div className="flex items-center justify-between">
           <h3 id="recs-h" className="text-sm font-semibold">
             Recommended fixes
           </h3>
           {rec.loading && <LoaderCircle className="size-4 animate-spin text-muted" aria-label="Loading" />}
         </div>
-        <p className="text-xs text-muted">Fixes for {METRIC_SUBJECT[metric]}</p>
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          Fixes for{' '}
+          <strong className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2 py-1 font-semibold text-primary">
+            <MetricIcon className="size-3.5 shrink-0" aria-hidden />
+            {METRIC_SUBJECT[metric]}
+          </strong>
+        </p>
       </div>
       {rec.error && (
         <p role="alert" className="rounded-lg bg-danger-soft p-2.5 text-xs text-danger">

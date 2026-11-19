@@ -10,10 +10,10 @@ React + Tailwind client, FastAPI backend, PostgreSQL + PostGIS, all run with Doc
 - Python 3.11+ (for the seed script)
 - The input data in `scripts/data/` (not in git, get it from the team):
 
-| File                                 | Contents                                           |
-| ------------------------------------ | -------------------------------------------------- |
-| `CoolCycle_Viladecans.gpkg`          | Municipal layers and the synthetic VAS-R1 tables   |
-| `bike_solar_screen_geojson.geojson`  | Solar statistics for each cycle segment            |
+| File                                | Contents                                         |
+| ----------------------------------- | ------------------------------------------------ |
+| `CoolCycle_Viladecans.gpkg`         | Municipal layers and the synthetic VAS-R1 tables |
+| `bike_solar_screen_geojson.geojson` | Solar statistics for each cycle segment          |
 
 ### 2. Create `.env` and pick a free database port
 
@@ -21,7 +21,7 @@ React + Tailwind client, FastAPI backend, PostgreSQL + PostGIS, all run with Doc
 cp .env.example .env
 ```
 
-The database is exposed on `POSTGRES_PORT` (default `5432`). If PostgreSQL is also installed directly on your machine, it already uses 5432, and the seed script and database tools will silently connect to *that* server instead of the Docker one. Check before starting:
+The database is exposed on `POSTGRES_PORT` (default `5432`). If PostgreSQL is also installed directly on your machine, it already uses 5432, and the seed script and database tools will silently connect to _that_ server instead of the Docker one. Check before starting:
 
 ```bash
 # Windows (PowerShell)
@@ -51,12 +51,12 @@ docker compose logs backend             # look for "Running upgrade" (first star
 curl http://localhost:8000/api/health   # {"status":"ok","database":true,"postgis":"3.6.1"}
 ```
 
-| Service  | URL                                                      |
-| -------- | -------------------------------------------------------- |
-| Client   | http://localhost:5173                                    |
-| API docs | http://localhost:8000/docs                               |
+| Service  | URL                                                               |
+| -------- | ----------------------------------------------------------------- |
+| Client   | http://localhost:5173                                             |
+| API docs | http://localhost:8000/docs                                        |
 | API      | http://localhost:8000/api/map-data, /api/evaluate, /api/recommend |
-| Database | `postgresql://postgres:postgres@localhost:<POSTGRES_PORT>/app` |
+| Database | `postgresql://postgres:postgres@localhost:<POSTGRES_PORT>/app`    |
 
 ### 4. Seed the database
 
@@ -78,11 +78,11 @@ python scripts/export_to_db.py
 
 A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities and the synthetic tables, with all 14 synthetic routes linked.
 
-| Command                                         | What it does                                                     |
-| ----------------------------------------------- | ---------------------------------------------------------------- |
-| `python scripts/export_to_db.py`                | Loads all data, updating existing rows. Keeps saved plans.       |
-| `python scripts/export_to_db.py --reset`        | Empties all tables first. Deletes saved plans.                   |
-| `python scripts/export_to_db.py --data-dir DIR` | Reads the input files from `DIR` instead of `scripts/data/`.     |
+| Command                                         | What it does                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `python scripts/export_to_db.py`                | Loads all data, updating existing rows. Keeps saved plans.   |
+| `python scripts/export_to_db.py --reset`        | Empties all tables first. Deletes saved plans.               |
+| `python scripts/export_to_db.py --data-dir DIR` | Reads the input files from `DIR` instead of `scripts/data/`. |
 
 **Synthetic data:** `intervention_type`, `hourly_profile` and `syn_segment` (and the rider counts derived from them) come from the VAS-R1 challenge dataset. They are demo data, not real Viladecans data.
 
@@ -102,22 +102,22 @@ Tables are under `app` → Schemas → `public`.
 
 Code changes hot-reload in both the client and the backend. Add or change dependencies with `docker compose up --build`.
 
-| Task                                   | Command                                                        |
-| -------------------------------------- | -------------------------------------------------------------- |
-| Start / stop everything                | `docker compose up -d` / `docker compose down`                 |
-| Reload data after the input changed    | `python scripts/export_to_db.py`                               |
-| Wipe the database and start over       | `docker compose down -v`, `docker compose up -d --build`, then seed again |
+| Task                                | Command                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| Start / stop everything             | `docker compose up -d` / `docker compose down`                            |
+| Reload data after the input changed | `python scripts/export_to_db.py`                                          |
+| Wipe the database and start over    | `docker compose down -v`, `docker compose up -d --build`, then seed again |
 
 ### Troubleshooting
 
-| Problem                                                      | Cause and fix                                                                 |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `ModuleNotFoundError: No module named 'psycopg'`             | The venv is not active, or packages went to another Python. Activate it and use `python -m pip install -r scripts/requirements.txt`. |
-| `database "app" does not exist` (any language)               | You reached a local PostgreSQL, not Docker. Change `POSTGRES_PORT` in `.env` (step 2), then `docker compose up -d`. |
-| `Tables not found. Run the migrations first`                 | The backend has not started yet or failed. Check `docker compose logs backend`. |
-| Migration fails with `relation ... already exists`           | Your database has tables from before Alembic was added. Wipe it: `docker compose down -v`, `docker compose up -d --build`, seed again. |
-| No tables in DBeaver                                         | Wrong port or database. Use your `POSTGRES_PORT` and database `app` (step 5), then refresh (F5). |
-| Port 5173 or 8000 already in use                             | Change `CLIENT_PORT` or `BACKEND_PORT` in `.env`.                             |
+| Problem                                            | Cause and fix                                                                                                                          |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `ModuleNotFoundError: No module named 'psycopg'`   | The venv is not active, or packages went to another Python. Activate it and use `python -m pip install -r scripts/requirements.txt`.   |
+| `database "app" does not exist` (any language)     | You reached a local PostgreSQL, not Docker. Change `POSTGRES_PORT` in `.env` (step 2), then `docker compose up -d`.                    |
+| `Tables not found. Run the migrations first`       | The backend has not started yet or failed. Check `docker compose logs backend`.                                                        |
+| Migration fails with `relation ... already exists` | Your database has tables from before Alembic was added. Wipe it: `docker compose down -v`, `docker compose up -d --build`, seed again. |
+| No tables in DBeaver                               | Wrong port or database. Use your `POSTGRES_PORT` and database `app` (step 5), then refresh (F5).                                       |
+| Port 5173 or 8000 already in use                   | Change `CLIENT_PORT` or `BACKEND_PORT` in `.env`.                                                                                      |
 
 ## Database migrations
 
@@ -131,12 +131,12 @@ alembic upgrade head                                     # applies it
 
 Always read the generated file before applying it. Autogenerate does not detect removed tables, so write `op.drop_table(...)` by hand when you delete a model.
 
-| Command                    | What it does                                     |
-| -------------------------- | ------------------------------------------------ |
-| `alembic upgrade head`     | Applies all pending migrations                   |
-| `alembic downgrade -1`     | Reverts the last migration                       |
-| `alembic check`            | Fails if the models and the database differ      |
-| `alembic history`          | Lists all migrations                             |
+| Command                | What it does                                |
+| ---------------------- | ------------------------------------------- |
+| `alembic upgrade head` | Applies all pending migrations              |
+| `alembic downgrade -1` | Reverts the last migration                  |
+| `alembic check`        | Fails if the models and the database differ |
+| `alembic history`      | Lists all migrations                        |
 
 Running Alembic outside Docker needs the backend dependencies: `pip install -r backend/requirements.txt`.
 

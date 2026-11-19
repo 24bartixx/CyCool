@@ -4,3 +4,7 @@
 - 2026-11-19 — OpenAI Codex updated the subtitle to describe what the fixes address for each metric.
 - 2026-11-19 — OpenAI Codex added a vertical list of local impacts to each recommended fix card.
 - 2026-11-19 — OpenAI Codex moved the worst-point shortcut from point details to a persistent map control.
+- 2026-11-19 — OpenAI Codex added metric icons and styled the Combined score as a summary row in fix cards.
+- 2026-11-19 — OpenAI Codex highlighted the selected metric in the Recommended fixes subtitle.
+- 2026-11-19 — OpenAI Codex increased the spacing between the subtitle and the first fix card.
+- 2026-11-19 — OpenAI Codex moved the Combined score to the top of the fix card’s impact list.
