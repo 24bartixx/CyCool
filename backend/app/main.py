@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.routers import health, planner
 
-app = FastAPI(title="CyCool API")
+app = FastAPI(title="CoolCycle API")
 
 app.add_middleware(
     CORSMiddleware,

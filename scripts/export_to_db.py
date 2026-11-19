@@ -1,4 +1,4 @@
-"""Seed the CyCool database from scripts/data and compute per-segment aggregates.
+"""Seed the CoolCycle database from scripts/data and compute per-segment aggregates.
 
 Loads the municipal layers and the synthetic VAS-R1 tables from CoolCycle_Viladecans.gpkg,
 the per-segment solar statistics from bike_solar_screen_geojson.geojson, then computes
@@ -58,7 +58,7 @@ DATA_SOURCES = [
         "notes": f"Taken from {SOLAR_GEOJSON_NAME}",
     },
     {
-        "code": "cycool_derived",
+        "code": "cool_cycle_derived",
         "origin": "derived",
         "name": "Computed by scripts/export_to_db.py: Euclidean nearest-amenity distances and rider assignment",
         "url": None,
