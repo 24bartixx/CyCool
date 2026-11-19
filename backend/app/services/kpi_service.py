@@ -19,6 +19,7 @@ def _ratio(numerator: float, denominator: float) -> float | None:
 
 
 def _network_state_kpis(ds: Dataset, state: dict[str, PointState]) -> dict[str, float]:
+    """Km of the whole built network (every piece, on or off the trails)."""
     a = ds.assumptions
     segs = [p for p in ds.points if p.kind == "segment"]
     comfortable_m = sum(p.length_m for p in segs if state[p.id].utci < a["comfortable_utci_c"])
@@ -26,7 +27,7 @@ def _network_state_kpis(ds: Dataset, state: dict[str, PointState]) -> dict[str, 
     water_m = sum(p.length_m for p in segs if state[p.id].water_dist_m <= a["water_ok_m"])
     total_m = sum(p.length_m for p in segs)
     return {
-        "trail_km": total_m / 1000,
+        "network_km": total_m / 1000,
         "comfortable_km": comfortable_m / 1000,
         "below_strong_heat_km": below_strong_heat_m / 1000,
         "water_reachable_km": water_m / 1000,
@@ -34,7 +35,7 @@ def _network_state_kpis(ds: Dataset, state: dict[str, PointState]) -> dict[str, 
 
 
 def _heat_dose(ds: Dataset, state: dict[str, PointState], trail_id: str, bench_utci: float) -> float:
-    """Rider-seconds x UTCI above the cool benchmark, over the trail's pieces, junctions and stations."""
+    """Rider-seconds x UTCI above the comfortable threshold, over the trail's pieces, junctions and stations."""
     return sum(
         riders(ds, p) * exposure_s(ds, p, state[p.id]) * max(0.0, state[p.id].utci - bench_utci)
         for p in ds.points
@@ -46,13 +47,12 @@ def _recovered_riders(ds: Dataset, base: dict[str, PointState], now: dict[str, P
     """Summer riders won back per trail.
 
     share closed = 1 - heat dose now / heat dose today, where the dose is rider-seconds x UTCI above the
-    mean UTCI of the cool benchmark trails, on the trail's pieces, junctions and stations (so shade at a
-    red light, a shorter wait and a station canopy count too, weighted by the time people spend there). Clamped to 0..1; recovered = (spring - summer riders) x share closed.
+    comfortable threshold, on the trail's pieces, junctions and stations (so shade at a red light, a shorter
+    wait and a station canopy count too, weighted by the time people spend there). Clamped to 0..1;
+    recovered = (spring - summer riders) x share closed. Pieces off the trails have no synthetic summer
+    drop, so they win back no riders.
     """
-    bench = [ds.trails[t].utci for t in ds.assumptions["cool_benchmark_trails"] if t in ds.trails]
-    if not bench:
-        return {tid: 0.0 for tid in ds.trails}
-    bench_utci = sum(bench) / len(bench)
+    bench_utci = float(ds.assumptions["comfortable_utci_c"])
     out = {}
     for tid, trail in ds.trails.items():
         before = _heat_dose(ds, base, tid, bench_utci)
@@ -69,14 +69,14 @@ def compute_kpis(
     before = _network_state_kpis(ds, base)
     after = _network_state_kpis(ds, now)
 
-    # UTCI drop on trail pieces (length-weighted) and at critical points.
+    # UTCI drop on pieces (length-weighted) and at critical points.
     cooled_trail_m = 0.0
     weighted_trail_drop = 0.0
     critical_drops: list[float] = []
     critical_total = 0
     for point in ds.points:
         drop = base[point.id].utci - now[point.id].utci
-        critical = point.kind == "junction" or ds.trails[point.trail_id].critical
+        critical = point.kind == "junction" or (point.trail_id is not None and ds.trails[point.trail_id].critical)
         critical_total += critical
         if drop <= EPS:
             continue
@@ -101,7 +101,7 @@ def compute_kpis(
     pv_avoided_t = sum(f.co2_kg_yr for f in plan if f.fix_id in PV_FIXES) / 1000
     comfortable_gain = after["comfortable_km"] - before["comfortable_km"]
 
-    # km adapted: trail pieces under trees or cool pavement, priced by those fixes only.
+    # km adapted: pieces under trees or cool pavement, priced by those fixes only.
     linear = [f for f in plan if FIX_RULES[f.fix_id]["linear"]]
     adapted = {p.id for f in linear for p in _fixed_pieces(ds, f)}
     adapted_km = sum(ds.points_by_id[pid].length_m for pid in adapted) / 1000

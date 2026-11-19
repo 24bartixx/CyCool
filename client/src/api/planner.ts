@@ -26,16 +26,24 @@ export type Trail = {
 export type MapPointInfo = {
   id: string
   kind: PointKind
-  trail_id: string
+  /** VAS-R1 trail of a street piece (null off the trails); the nearest trail of a station. */
+  trail_id: string | null
   street: string
   length_m: number
   solar: number
   wgs: LatLng[]
   mid_wgs: LatLng
   fountain_dist_m: number
-  /** Baseline UTCI at this point (trail UTCI shifted by local sun, or plus the local anomaly). */
+  /** Baseline UTCI at this point: computed from weather, sun and ground (pieces, stations) or synthetic (junctions). */
   utci_base_c: number
-  /** Real network segment a trail piece belongs to; linear fixes cover all its pieces. */
+  utci_source: 'computed' | 'synthetic'
+  /** Inputs of a computed UTCI: share of direct sun, ground temperature at the design hour, mean radiant temperature. */
+  sun_share?: number
+  ground_temp_c?: number
+  mrt_c?: number
+  /** Landsat summer surface temperature (own segment, or the nearest street for a station). */
+  lst_c?: number | null
+  /** Real network segment a street piece belongs to; linear fixes cover all its pieces. */
   segment_id?: string
   /** How a junction or station was placed on the real map. */
   located_by?: string
@@ -83,13 +91,32 @@ export type Assumption = {
   note: string
 }
 
+/** The hot summer afternoon the UTCI model is computed for (real ERA5 weather, mean of the hot days). */
+export type HeatModel = {
+  weather: {
+    hour: number
+    days: number
+    days_total: number
+    temp_c: number
+    rh_pct: number
+    wind_ms: number
+    ghi_wm2: number
+    dhi_wm2: number
+    direct_h_wm2: number
+    dni_wm2: number
+    overpass_temp_c: number
+  }
+  ground_albedo: number
+  ground_emissivity: number
+  off_trail_spring_ratio: number
+}
+
 export type MetricInfo = { id: MetricId; label: string; description: string }
 
 export type MapData = {
   trails: Trail[]
   points: MapPointInfo[]
   fountains: { id: string; location: string | null; wgs: LatLng }[]
-  context_network: GeoJSON.FeatureCollection
   /** OpenStreetMap park outlines (display only). */
   parks: GeoJSON.FeatureCollection<
     GeoJSON.Polygon | GeoJSON.MultiPolygon,
@@ -100,6 +127,7 @@ export type MapData = {
   catalogue: CatalogueItem[]
   assumptions: Assumption[]
   solar_range: [number, number]
+  heat_model: HeatModel
   metrics: MetricInfo[]
 }
 
@@ -123,7 +151,8 @@ export type PointResult = {
 }
 
 export type NetworkKpis = {
-  trail_km: number
+  /** Length of the whole built network (every street piece). */
+  network_km: number
   comfortable_km: number
   /** Trail length with UTCI below the "very strong heat stress" threshold (strong_heat_utci_c). */
   below_strong_heat_km: number
@@ -213,8 +242,5 @@ export type PlanRequest = { metric: MetricId; budget: number; accepted: Accepted
 
 export const getMapData = (signal?: AbortSignal) => apiGet<MapData>('/map-data', signal)
 export const postEvaluate = (req: PlanRequest, signal?: AbortSignal) => apiPost<Evaluation>('/evaluate', req, signal)
-export type AutoPlan = { added: AcceptedFix[]; accepted: AcceptedFix[] }
-
-export const postAutoPlan = (req: PlanRequest, signal?: AbortSignal) => apiPost<AutoPlan>('/auto-plan', req, signal)
 export const postRecommend = (req: PlanRequest & { point_id: string }, signal?: AbortSignal) =>
   apiPost<Recommendation>('/recommend', req, signal)

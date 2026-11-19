@@ -3,7 +3,11 @@ import { METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 
 type Props = { metrics: MetricInfo[]; value: MetricId; onChange: (m: MetricId) => void }
 
-export default function MetricPicker({ metrics, value, onChange }: Props) {
+const ORDER: MetricId[] = ['combined', 'heat', 'sun', 'water']
+const rank = (id: MetricId) => (ORDER.includes(id) ? ORDER.indexOf(id) : ORDER.length)
+
+export default function MetricPicker({ metrics: unordered, value, onChange }: Props) {
+  const metrics = [...unordered].sort((a, b) => rank(a.id) - rank(b.id))
   function onKeyDown(e: React.KeyboardEvent) {
     const i = metrics.findIndex((m) => m.id === value)
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') onChange(metrics[(i + 1) % metrics.length].id)

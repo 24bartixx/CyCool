@@ -1,6 +1,6 @@
 import { ArrowDown, Info, type LucideIcon } from 'lucide-react'
 import type { Kpis, MetricId } from '../api/planner.ts'
-import { celsius, DASH, dec1, dec2, eur, km } from '../lib/format.ts'
+import { celsius, DASH, dec1, dec2, km } from '../lib/format.ts'
 import { KPI_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 
 /*
@@ -72,7 +72,7 @@ function coverage(afterKm: number, gainKm: number, totalKm: number, tone: BarTon
 }
 
 function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?: number, strongHeatC?: number, comfortC?: number): Tile[] {
-  const { comfortable_km, below_strong_heat_km, trail_km, water_reachable_km } = k.after
+  const { comfortable_km, below_strong_heat_km, network_km, water_reachable_km } = k.after
   const waterGain = water_reachable_km - k.before.water_reachable_km
   const strongHeatGain = below_strong_heat_km - k.before.below_strong_heat_km
   const waterDistance = waterReachM == null ? 'the configured distance' : `${waterReachM} m`
@@ -96,25 +96,25 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
       label: 'Comfortable trail length',
       icon: KPI_ICON.comfort,
       tone: 'cool',
-      ...coverage(comfortable_km, k.comfortable_km_gain, trail_km, 'cool', 'comfortable'),
-      sub: `${dec2(comfortable_km)} / ${km(trail_km)} of trails`,
-      formula: `Share of total trail length with UTCI below ${comfort}.`,
+      ...coverage(comfortable_km, k.comfortable_km_gain, network_km, 'cool', 'comfortable'),
+      sub: `${dec2(comfortable_km)} / ${km(network_km)} of network`,
+      formula: `Share of the whole network's length with UTCI below ${comfort} on a hot summer afternoon (computed from real weather, local sun and ground temperature).`,
     },
     {
       label: 'Out of very strong heat',
       icon: KPI_ICON.heatStress,
       tone: 'cool',
-      ...coverage(below_strong_heat_km, strongHeatGain, trail_km, 'cool', `below ${strongHeat}`),
-      sub: `${dec2(below_strong_heat_km)} / ${km(trail_km)} · UTCI below ${strongHeat}`,
-      formula: `Share of total trail length with UTCI below ${strongHeat}: at most "strong heat stress", out of the "very strong heat stress" band. A single fix often moves a hot trail across this line before it reaches the comfort threshold.`,
+      ...coverage(below_strong_heat_km, strongHeatGain, network_km, 'cool', `below ${strongHeat}`),
+      sub: `${dec2(below_strong_heat_km)} / ${km(network_km)} · UTCI below ${strongHeat}`,
+      formula: `Share of the whole network's length with UTCI below ${strongHeat}: at most "strong heat stress", out of the "very strong heat stress" band.`,
     },
     {
       label: 'Drinking water nearby',
       icon: KPI_ICON.water,
       tone: 'water',
-      ...coverage(water_reachable_km, waterGain, trail_km, 'water', 'with water nearby'),
-      sub: `${dec2(water_reachable_km)} / ${km(trail_km)} · within ${waterDistance}`,
-      formula: `A trail piece counts if any part is within ${waterDistance} of a drinking fountain or cyclist oasis in a straight line.`,
+      ...coverage(water_reachable_km, waterGain, network_km, 'water', 'with water nearby'),
+      sub: `${dec2(water_reachable_km)} / ${km(network_km)} · within ${waterDistance}`,
+      formula: `A street piece counts if any part is within ${waterDistance} of a drinking fountain or cyclist oasis in a straight line.`,
     },
     {
       label: '°C at critical points',
@@ -128,19 +128,7 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
           : `none of ${k.critical_total} critical points cooled yet`,
       formula:
         'Average modelled UTCI drop over ALL critical points (uncooled ones count 0): the 5 traffic-light junctions and every point on a trail rated "Critical" in the VAS-R1 data. Several fixes at one place combine with a discount (assumptions are listed in the PDF report). A green wave shortens the wait instead of lowering UTCI, so it does not show here.' +
-        (cooled ? ` Over all cooled trail pieces: ${celsius(k.utci_drop_trail_avg_c)} on ${km(k.utci_cooled_trail_km)}.` : ''),
-    },
-    {
-      label: 'New cyclists',
-      icon: KPI_ICON.riders,
-      tone: 'cool',
-      value: k.new_summer_cyclists > 0 ? `+${dec1(k.new_summer_cyclists)}` : '0',
-      sub:
-        k.eur_per_new_cyclist != null
-          ? `${eur(k.eur_per_new_cyclist)} each + ${eur(k.opex_eur_per_new_cyclist_year)}/yr · saves ${eur(k.eur_saved_per_cyclist_year)}/yr per cyclist`
-          : `each would save ${eur(k.eur_saved_per_cyclist_year)}/yr on travel`,
-      formula:
-        'Per trail: lost summer riders (spring − summer, synthetic) × share of the trail’s heat dose removed (rider-seconds × UTCI above the cool benchmark trails, on pieces, junctions and stations). Rider-km ÷ average trip (INT-08) = trips/day; ÷ trips per cyclist = cyclists (spring riders kept on the bike in summer). Savings: only the share of trips that replace a car × € per trip (INT-08) × summer days.',
+        (cooled ? ` Over all cooled street pieces: ${celsius(k.utci_drop_trail_avg_c)} on ${km(k.utci_cooled_trail_km)}.` : ''),
     },
     {
       label: 'CO₂ avoided',
@@ -150,15 +138,6 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
       sub: `${dec2(k.co2_trips_t_per_year)} t replaced car trips · ${dec2(k.co2_sequestration_t_per_year)} t trees & oases · ${dec2(k.co2_pv_avoided_t_per_year)} t solar canopies`,
       formula:
         'Replaced trips: recovered trips/day × share that replace a car × kg CO₂ per car trip (INT-08) × summer days. Plus CO₂ captured by trees and oasis greenery, and CO₂ avoided by the solar power of station canopies (shown separately).',
-    },
-    {
-      label: '€ per km adapted',
-      icon: KPI_ICON.cost,
-      tone: 'neutral',
-      value: eur(k.eur_per_adapted_km),
-      sub: `${km(k.adapted_km)} adapted for ${eur(k.adapted_capex_eur)} · whole plan ${eur(k.capex_eur)} + ${eur(k.opex_eur_per_year)}/yr`,
-      formula:
-        'Cost (CAPEX) of trees and cool pavement ÷ km of trail they cover. Junction, station and oasis fixes are not km of route, so they are left out of both sides. "—" until a trail piece gets trees or cool pavement.',
     },
   ]
 }
@@ -233,7 +212,7 @@ export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReach
       <ul className="flex gap-px overflow-x-auto bg-border">
         {kpis
           ? tiles(kpis, burdenPct, metric, waterReachM, strongHeatC, comfortC).map((t) => <TileView key={t.label} t={t} hasPlan={hasPlan} />)
-          : Array.from({ length: 8 }, (_, i) => (
+          : Array.from({ length: 6 }, (_, i) => (
               <li key={i} className="flex min-w-[180px] flex-1 items-center gap-2.5 bg-surface px-3 py-2.5">
                 <div className="cc-skeleton size-8 rounded-lg" />
                 <div>

@@ -3,6 +3,7 @@
 Loads the municipal layers and the synthetic VAS-R1 tables from CoolCycle_Viladecans.gpkg,
 the OpenStreetMap park outlines from osm_parks.geojson (made by fetch_osm_parks.py),
 the Landsat summer surface temperature per segment from landsat_lst_segments.json (made by fetch_landsat_lst.py),
+the hourly July-August weather from summer_weather.json (made by fetch_summer_weather.py),
 the per-segment solar statistics from bike_solar_screen_geojson.geojson, then computes
 segment_metrics in PostGIS (nearest fountain / AMBici / facility distances, rider counts).
 
@@ -48,6 +49,7 @@ TRAIL_MAPPING_FILE = SCRIPTS_DIR / "trail_mapping.yaml"
 SOLAR_GEOJSON_NAME = "bike_solar_screen_geojson.geojson"
 OSM_PARKS_NAME = "osm_parks.geojson"
 LANDSAT_LST_NAME = "landsat_lst_segments.json"
+WEATHER_NAME = "summer_weather.json"
 
 DATA_SOURCES = [
     {
@@ -86,6 +88,13 @@ DATA_SOURCES = [
         "notes": f"Summer median per segment, fetched with scripts/fetch_landsat_lst.py into {LANDSAT_LST_NAME}",
     },
     {
+        "code": "open_meteo_era5",
+        "origin": "external",
+        "name": "Open-Meteo historical weather (ECMWF ERA5 / ERA5-Land reanalysis), CC BY 4.0",
+        "url": "https://open-meteo.com/en/docs/historical-weather-api",
+        "notes": f"Hourly July-August 2023-2025, fetched with scripts/fetch_summer_weather.py into {WEATHER_NAME}",
+    },
+    {
         "code": "vas_r1_synthetic",
         "origin": "synthetic",
         "name": "VAS-R1 'Comfortable cycling routes' challenge dataset (synthetic/demo data, not real Viladecans data)",
@@ -115,7 +124,7 @@ INTERVENTION_UNITS: dict[str, tuple[str, str]] = {
 
 DATA_TABLES = [
     "plan_item", "plan", "segment_metrics", "syn_segment_link", "syn_point", "syn_segment", "hourly_profile",
-    "intervention_type", "osm_park", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
+    "intervention_type", "osm_park", "weather_hour", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
     "data_source",
 ]
 
@@ -267,6 +276,13 @@ def seed_osm_parks(cur: psycopg.Cursor, geojson_path: Path, source_id: int) -> N
     upsert(cur, "osm_park", rows)
 
 
+def seed_weather(cur: psycopg.Cursor, json_path: Path, source_id: int) -> None:
+    """Real hourly summer weather (input of the backend's UTCI model)."""
+    hours = json.loads(json_path.read_text(encoding="utf-8"))["hours"]
+    cur.execute("DELETE FROM weather_hour")
+    upsert(cur, "weather_hour", [{**h, "time": h["time"].replace("T", " "), "source_id": source_id} for h in hours], key="time")
+
+
 def seed_synthetic(cur: psycopg.Cursor, gpkg: sqlite3.Connection, source_id: int) -> None:
     interventions = []
     for r in gpkg_rows(gpkg, "vas_interventions"):
@@ -411,7 +427,7 @@ def aggregate_solar(cur: psycopg.Cursor, geojson_path: Path) -> None:
 
 
 def aggregate_lst(cur: psycopg.Cursor, json_path: Path) -> None:
-    """Landsat summer land surface temperature per segment (display only)."""
+    """Landsat summer land surface temperature per segment (input of the backend's UTCI model)."""
     values = json.loads(json_path.read_text(encoding="utf-8"))["segments"]
     cur.execute("UPDATE segment_metrics SET lst_summer_c = NULL")
     cur.executemany(
@@ -424,7 +440,11 @@ def aggregate_lst(cur: psycopg.Cursor, json_path: Path) -> None:
 
 
 def aggregate_cyclists(cur: psycopg.Cursor) -> None:
-    """Riders per segment: synthetic value on matched streets, class median elsewhere (cycle lanes only)."""
+    """Riders per segment: synthetic value on matched streets, median of the matched streets of the same class elsewhere.
+
+    Every built segment gets a value (the planner covers the whole network); a class with no matched street
+    falls back to the median over all matched streets.
+    """
     cur.execute("UPDATE segment_metrics SET daily_cyclists_summer = NULL, cyclists_source = NULL")
     cur.execute(
         """
@@ -455,7 +475,7 @@ def aggregate_cyclists(cur: psycopg.Cursor) -> None:
         FROM cycle_segment c
         CROSS JOIN overall o
         LEFT JOIN by_class b ON b.cycle_class = c.cycle_class
-        WHERE c.id = m.segment_id AND c.is_cycle_candidate AND m.daily_cyclists_summer IS NULL
+        WHERE c.id = m.segment_id AND m.daily_cyclists_summer IS NULL
         """
     )
     print(f"  {'segment_metrics':<20} riders: {matched} from synthetic match, {cur.rowcount} class-median assumed")
@@ -467,7 +487,8 @@ def run(data_dir: Path, reset: bool) -> None:
     solar_path = data_dir / SOLAR_GEOJSON_NAME
     parks_path = data_dir / OSM_PARKS_NAME
     lst_path = data_dir / LANDSAT_LST_NAME
-    for path in (gpkg_path, solar_path, parks_path, lst_path):
+    weather_path = data_dir / WEATHER_NAME
+    for path in (gpkg_path, solar_path, parks_path, lst_path, weather_path):
         if not path.is_file():
             sys.exit(f"Missing input file: {path}")
 
@@ -484,6 +505,7 @@ def run(data_dir: Path, reset: bool) -> None:
         sources = seed_sources(cur)
         seed_municipal(cur, gpkg, sources["viladecans_municipal"])
         seed_osm_parks(cur, parks_path, sources["osm_parks"])
+        seed_weather(cur, weather_path, sources["open_meteo_era5"])
         seed_synthetic(cur, gpkg, sources["vas_r1_synthetic"])
         link_synthetic_segments(cur)
 

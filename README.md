@@ -16,10 +16,13 @@ React + Tailwind client, FastAPI backend, PostgreSQL + PostGIS, all run with Doc
 | `bike_solar_screen_geojson.geojson` | Solar statistics for each cycle segment          |
 | `osm_parks.geojson`                 | Park outlines from OpenStreetMap (see below)     |
 | `landsat_lst_segments.json`         | Landsat summer surface temperature per segment   |
+| `summer_weather.json`               | Hourly July–August weather (ERA5, Open-Meteo)    |
 
 `osm_parks.geojson` holds the `leisure=park` polygons inside the Viladecans boundary, taken from the Overpass API. To refresh it, run `python scripts/fetch_osm_parks.py`. You don't need this for a normal setup. Park data © OpenStreetMap contributors, licensed under the [ODbL](https://www.openstreetmap.org/copyright).
 
-`landsat_lst_segments.json` holds the summer land surface temperature of every network segment: the per-pixel median of clear July–August 2023–2025 Landsat 8/9 Collection 2 Level-2 scenes (ST_B10, ~10:30 overpass), sampled every 10 m along each segment. To refresh it, run `python scripts/fetch_landsat_lst.py` (reads from Microsoft Planetary Computer, no account needed). It is ground surface temperature, not UTCI, and is not used in scores or KPIs (the API returns it as `surface_temp`; it is not drawn on the map). Landsat data courtesy of the U.S. Geological Survey (public domain).
+`landsat_lst_segments.json` holds the summer land surface temperature of every network segment: the per-pixel median of clear July–August 2023–2025 Landsat 8/9 Collection 2 Level-2 scenes (ST_B10, ~10:30 overpass), sampled every 10 m along each segment. To refresh it, run `python scripts/fetch_landsat_lst.py` (reads from Microsoft Planetary Computer, no account needed). It is ground surface temperature, not UTCI; the backend's UTCI model uses it for the heat the ground radiates (the API also returns it as `surface_temp`; it is not drawn on the map). Landsat data courtesy of the U.S. Geological Survey (public domain).
+
+`summer_weather.json` holds every hour of July and August 2023–2025 at Viladecans: air temperature, humidity, 10 m wind and solar radiation from the ECMWF ERA5 / ERA5-Land reanalysis. To refresh it, run `python scripts/fetch_summer_weather.py` (Open-Meteo historical weather API, no account needed). The backend averages the hottest afternoons and computes UTCI per street with ECMWF's [thermofeel](https://github.com/ecmwf/thermofeel) library (Apache 2.0). Weather data by [Open-Meteo.com](https://open-meteo.com/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); it contains modified Copernicus Climate Change Service information.
 
 ### 2. Create `.env` and pick a free database port
 
@@ -82,7 +85,7 @@ python -m pip install -r scripts/requirements.txt
 python scripts/export_to_db.py
 ```
 
-A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities, 41 OSM parks, Landsat surface temperature for all 1037 segments and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
+A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities, 41 OSM parks, Landsat surface temperature for all 1037 segments, 4464 weather hours and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup. After pulling a change to `backend/requirements.txt`, rebuild it instead (`docker compose up -d --build backend`).
 
 | Command                                         | What it does                                                 |
 | ----------------------------------------------- | ------------------------------------------------------------ |
@@ -154,7 +157,7 @@ backend/app/
   core/config.py             settings from env vars
   db/session.py              SQLAlchemy engine + get_db dependency
   routers/                   HTTP layer (planner = map-data/evaluate/recommend, health = DB/PostGIS check)
-  services/                  planner logic (dataset, effects, metrics, KPIs)
+  services/                  planner logic (dataset, UTCI heat model, effects, metrics, KPIs)
   schemas/                   Pydantic request/response models
 backend/alembic/
   env.py                     Alembic setup (uses app settings and models)
@@ -163,6 +166,7 @@ scripts/
   export_to_db.py            seeds the database and computes per-segment metrics
   fetch_osm_parks.py         one-off: OpenStreetMap park outlines -> data/osm_parks.geojson
   fetch_landsat_lst.py       one-off: Landsat summer surface temperature per segment -> data/landsat_lst_segments.json
+  fetch_summer_weather.py    one-off: hourly July-August weather (ERA5 via Open-Meteo) -> data/summer_weather.json
   data/                      input data (GeoPackage, GeoJSON)
 client/src/
   theme/colors.css           app colors, the only place to change them

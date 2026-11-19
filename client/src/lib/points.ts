@@ -21,14 +21,14 @@ export function rankWorst(
     .map((r) => r.id)
 }
 
-export const KIND_LABEL = { segment: 'Trail piece', junction: 'Traffic-light junction', station: 'Bike station' } as const
-export const KIND_SHORT = { segment: 'Trail', junction: 'Junction', station: 'Station' } as const
+export const KIND_LABEL = { segment: 'Street piece', junction: 'Traffic-light junction', station: 'Bike station' } as const
+export const KIND_SHORT = { segment: 'Street', junction: 'Junction', station: 'Station' } as const
 
 export function pointTitle(p: MapPointInfo): string {
   return p.kind === 'segment' ? p.street : (p.name ?? p.id)
 }
 
-/** A station further than this from every trail is off the trails (it still takes the nearest trail's heat). */
+/** A station further than this from every trail is off the trails (its heat comes from the nearest street). */
 export const ON_TRAIL_M = 50
 
 export function isOffTrail(p: MapPointInfo): boolean {
@@ -40,7 +40,8 @@ export function pointSubtitle(p: MapPointInfo, trail?: Trail): string {
     const where = trail && (isOffTrail(p) ? `${Math.round(p.trail_dist_m ?? 0)} m off ${trail.name}` : trail.name)
     return [p.address, where].filter(Boolean).join(' · ')
   }
-  const parts = [trail?.name, p.kind === 'segment' ? `segment ${p.id}` : undefined]
+  const route = trail?.name ?? (p.kind === 'segment' ? 'Off the VAS-R1 trails' : undefined)
+  const parts = [route, p.kind === 'segment' ? `segment ${p.id}` : undefined]
   return parts.filter(Boolean).join(' · ')
 }
 

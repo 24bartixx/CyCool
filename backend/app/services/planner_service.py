@@ -78,7 +78,6 @@ def static_map_data(ds: Dataset) -> dict:
         "trails": [t.raw for t in ds.trails.values()],
         "points": [{k: v for k, v in p.raw.items() if k not in ("utm", "mid_utm")} for p in ds.points],
         "fountains": [{"id": f["id"], "location": f["location"], "wgs": f["wgs"]} for f in ds.fountains],
-        "context_network": ds.context_network,
         "parks": ds.parks,
         "bike_parkings": ds.bike_parkings,
         "surface_temp": ds.surface_temp,
@@ -94,6 +93,12 @@ def static_map_data(ds: Dataset) -> dict:
         ],
         "assumptions": ds.assumption_list,
         "solar_range": [ds.solar_min, ds.solar_max],
+        "heat_model": {
+            "weather": ds.weather.as_dict(),
+            "ground_albedo": a["ground_albedo"],
+            "ground_emissivity": a["ground_emissivity"],
+            "off_trail_spring_ratio": round(ds.off_trail_spring_ratio, 3),
+        },
         "metrics": [
             {
                 "id": "water",
@@ -108,7 +113,11 @@ def static_map_data(ds: Dataset) -> dict:
             {
                 "id": "heat",
                 "label": "Heat stress",
-                "description": f"UTCI felt temperature at {a['heat_reference_hour']}:00 (synthetic per trail, shifted by real local sun): fine at {a['utci_ok_c']} °C, worst at {a['utci_bad_c']} °C.",
+                "description": (
+                    f"UTCI felt temperature at {a['heat_reference_hour']}:00 on a hot summer day, computed from real "
+                    "weather, local sun and ground temperature (junctions: synthetic VAS-R1 values): "
+                    f"fine at {a['utci_ok_c']} °C, worst at {a['utci_bad_c']} °C."
+                ),
             },
             {
                 "id": "combined",

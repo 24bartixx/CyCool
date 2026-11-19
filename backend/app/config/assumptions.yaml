@@ -44,7 +44,7 @@
   value: 0.5
   unit: share
   source: team assumption
-  note: The challenge is about heat. The piece UTCI is already shifted by its real sun exposure, so sun is partly inside heat; giving sun and heat equal weight would count sun twice.
+  note: The challenge is about heat. The UTCI model already takes the real sun exposure of each place, so sun is partly inside heat; giving sun and heat equal weight would count sun twice.
 - key: weight_sun
   label: Weight of sun in the combined score
   value: 0.25
@@ -62,19 +62,57 @@
   value: 32
   unit: °C
   source: standard
-  note: UTCI above 32 °C is "strong heat stress"; a trail piece below it counts as climate-comfortable. A typical piece of a "Critical" trail stays above it even with trees and cool pavement (e.g. 38.4 - 4.5 - 0.9 = 33.0 °C), so this KPI moves most on moderate trails; read it together with the km out of very strong heat and the °C reduction at critical points.
+  note: UTCI above 32 °C is "strong heat stress"; a piece below it counts as climate-comfortable. On the hot afternoon of the model even full shade is ~34 °C, so only shaded streets get below it with trees (e.g. 34.5 - 4.5 = 30 °C) and a sunny street stays above it even with trees and cool pavement (37.6 - 4.5 - 0.45 = 32.65 °C); read it together with the km out of very strong heat and the °C reduction at critical points.
 - key: strong_heat_utci_c
   label: Very strong heat stress threshold
   value: 38
   unit: °C
   source: standard
-  note: UTCI 38 °C and above is "very strong heat stress"; a trail piece below it is at most in strong heat stress.
+  note: UTCI 38 °C and above is "very strong heat stress"; a piece below it is at most in strong heat stress.
 - key: heat_reference_hour
   label: Hour of the heat model
   value: 14
   unit: h
   source: VAS-R1 data
-  note: Trail UTCI is given at 14:00. Each piece is shifted from its trail's UTCI by its real sun exposure, scaled by the gap between unshaded asphalt and a shaded park in the hourly profile at this hour.
+  note: The VAS-R1 brief gives UTCI at 14:00, the hottest cycling hour of its hourly profile. The UTCI model uses the real weather at this local hour (radiation is the mean of the hour before).
+
+# ---- heat model (UTCI computed from real inputs; junctions keep the synthetic VAS-R1 UTCI)
+- key: hot_day_percentile
+  label: Hot summer afternoon
+  value: 90
+  unit: percentile
+  source: team assumption
+  note: The model is evaluated for a hot afternoon, not an average one - the July-August 2023-2025 days whose air temperature at the reference hour is at or above this percentile (19 of 186 days), each weather variable averaged over those same days so they stay consistent (ERA5 reanalysis via Open-Meteo). Planners adapt for the hot days; the median day (28 °C) would hide the problem.
+- key: landsat_overpass_hours
+  label: Hours around the Landsat overpass
+  value: [10, 11]
+  unit: h
+  source: standard
+  note: Landsat 8/9 pass over Viladecans at ~10:30 local time. The median air temperature of these hours is subtracted from the Landsat surface temperature to get how much hotter each ground is than the air; that excess is added to the air temperature of the reference hour (conservative - the excess usually grows towards midday).
+- key: sun_share_from
+  label: Share of direct sun at a place
+  value: sun score
+  unit: share
+  source: team assumption
+  note: The direct-sun term of the radiation is scaled by the sun score of the real solar index (network 5th percentile = full shade, 95th = full sun). The lowest values are ~27% of the highest, about the diffuse share of annual sunshine in Barcelona, so the index reads as diffuse light plus a share of direct sun. Diffuse light and sky view are not reduced in shade.
+- key: ground_albedo
+  label: Ground albedo
+  value: 0.15
+  unit: share
+  source: standard
+  note: Typical of aged asphalt and concrete pavements (0.1-0.2). Sets how much sunlight the ground reflects onto a person.
+- key: ground_emissivity
+  label: Ground emissivity
+  value: 0.95
+  unit: share
+  source: standard
+  note: Typical of asphalt and concrete (0.93-0.96). Sets the longwave heat the ground radiates at its surface temperature.
+- key: station_heat_from
+  label: Heat and sun at an AMBici station
+  value: nearest street segment
+  unit: ""
+  source: team assumption
+  note: A station's UTCI is computed like a piece's, from the real solar index and Landsat surface temperature of the nearest street segment. The synthetic temperature anomaly of the two VAS-R1 stations is not added (it was relative to the synthetic trail UTCI).
 
 # ---- ranking and burden
 - key: cycling_speed_ms
@@ -95,18 +133,18 @@
   unit: people/day
   source: team assumption
   note: A station has 20-40 docks (catalogue INT-06 unit) used ~5 times a day. Only these people stand at the station; weighting it by every rider of its trail (up to 1,150) overstated it.
-- key: station_heat_from
-  label: Heat and sun at an AMBici station
-  value: nearest trail
-  unit: ""
+- key: off_trail_riders
+  label: Riders on a street off the trails
+  value: class median x spring/summer ratio
+  unit: riders/day
   source: team assumption
-  note: The real AMBici stations have no heat data. Each takes the synthetic UTCI of the nearest VAS-R1 trail (also when it lies off the trails) and the real solar index of the nearest street segment.
+  note: Streets off the VAS-R1 trails have no rider counts. Each takes the median synthetic summer riders of the matched trail streets of its cycle class (e.g. cycle lane on the pavement, cycle street, pedestrian zone), scaled to spring by the trails' total spring / summer riders, as trail points use spring riders. They have no summer drop, so they win back no riders in the KPIs.
 - key: vas_station_match
   label: VAS-R1 stations placed on real AMBici stations
   value: ["EST-B01 → 34863", "EST-B02 → 34868"]
   unit: ""
   source: team assumption
-  note: Matched by name and trail, as their synthetic coordinates are 120–650 m off. "Train Station Hub" is 02. RENFE - Parc de la Marina; "Atrium" on Tarradellas Ave is 09. Torrent Ballester - Atrium. Both keep their synthetic temperature anomaly and shade.
+  note: Matched by name and trail, as their synthetic coordinates are 120–650 m off. "Train Station Hub" is 02. RENFE - Parc de la Marina; "Atrium" on Tarradellas Ave is 09. Torrent Ballester - Atrium. Both keep their synthetic notes and shade.
 
 # ---- fix effects
 - key: trees_solar_cut
@@ -141,12 +179,12 @@
   note: INT-01 and INT-04 are priced per 100 linear metres and are laid along the whole real street segment, priced pro rata to its length.
 
 # ---- KPIs (riders and replaced trips)
-- key: cool_benchmark_trails
-  label: Cool benchmark trails
-  value: [TRM-03, TRM-07]
+- key: rider_drop_from
+  label: What drives the summer rider drop
+  value: heat dose above the comfortable threshold
   unit: ""
-  source: VAS-R1 data
-  note: The two trails with the lowest UTCI and the smallest summer ridership drop. Removing a trail's heat dose above their mean UTCI (UTCI excess x rider-seconds on its pieces and junctions) wins back all of its summer drop, proportionally in between. Checked against the data - across the 14 trails the summer drop is linear in UTCI (r = 0.99) and reaches zero at ~28.7 °C, close to the benchmark mean of 29.85 °C.
+  source: team assumption
+  note: A trail's summer drop (synthetic spring minus summer riders) is caused by its heat dose - UTCI above the comfortable threshold (32 °C) x rider-seconds on its pieces, junctions and stations. Removing the whole dose wins back the whole drop, proportionally in between. In the synthetic data the drop is linear in UTCI (r = 0.99) and reaches zero at ~28.7 °C; the computed UTCI no longer ranks the trails like the synthetic one, so the zero point is the standard comfort threshold rather than the cool VAS-R1 trails.
 - key: summer_days
   label: Summer days per year
   value: 122

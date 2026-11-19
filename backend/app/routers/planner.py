@@ -18,7 +18,7 @@ def _pairs(req: PlanRequest) -> list[tuple[str, str]]:
 
 @router.get("/map-data")
 def map_data(ds: DatasetDep) -> dict[str, Any]:
-    """Static layers: trails, clickable points, fountains, parks, bike parkings, surface temperature, context network, catalogue, assumptions."""
+    """Static layers: trails, clickable points, fountains, parks, bike parkings, surface temperature, heat model inputs, catalogue, assumptions."""
     return static_map_data(ds)
 
 

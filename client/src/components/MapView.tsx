@@ -608,7 +608,6 @@ export default function MapView({
   const popupRef = useRef<L.Popup>(null);
   const [map, setMap] = useState<L.Map | null>(null);
   const [showPlan, setShowPlan] = useState(true);
-  const [showContext, setShowContext] = useState(false);
   const [showFountains, setShowFountains] = useState(false);
   const [showShade, setShowShade] = useState(false);
   const [showBikeParking, setShowBikeParking] = useState(false);
@@ -716,21 +715,6 @@ export default function MapView({
           focusRequest={focusRequest}
           popupRef={popupRef}
         />
-
-        <Pane name="context" style={{ zIndex: 380 }}>
-          {showContext && (
-            <GeoJSON
-              data={mapData.context_network}
-              interactive={false}
-              style={(f) => ({
-                color: neutral,
-                weight: f?.properties?.cycle ? 2 : 1.25,
-                opacity: 0.9,
-                dashArray: f?.properties?.cycle ? undefined : "3 4",
-              })}
-            />
-          )}
-        </Pane>
 
         {/* Shade reach under the parks: drawn opaque and the pane faded as a whole, so overlapping parks and oases
             merge into one evenly tinted area. */}
@@ -982,7 +966,7 @@ export default function MapView({
                         , {metres(p.trail_dist_m)} off the trails
                         <br />
                         <span style={{ color: "var(--color-warning)" }}>
-                          Heat taken from the nearest trail
+                          Heat from the nearest street
                         </span>
                       </>
                     )}
@@ -1090,11 +1074,6 @@ export default function MapView({
             label: "Bicibox bike parkings ",
             checked: showBikeParking,
             set: setShowBikeParking,
-          },
-          {
-            label: "Rest of the network",
-            checked: showContext,
-            set: setShowContext,
           },
         ].map((o) => (
           <label

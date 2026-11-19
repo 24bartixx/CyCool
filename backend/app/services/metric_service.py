@@ -1,9 +1,9 @@
-"""Scores (0 = fine, 1 = worst), ranking and burden for every trail point.
+"""Scores (0 = fine, 1 = worst), ranking and burden for every point of the network.
 
 - severity (ranks the worst list) = score x riders/day at the point. It does not depend on how long a
   trail piece happens to be, so cutting the network differently doesn't reorder the list.
 - burden (what a plan reduces) = score x riders/day x seconds a rider spends there, in rider-hours.
-  Pieces: length / cycling speed, scaled so a trail's total ride time matches its VAS-R1 length;
+  Pieces: length / cycling speed, on a trail scaled so its total ride time matches its VAS-R1 length;
   junctions: their red-light wait (a green wave shortens it); stations: the dwell time.
   A fix counts through the score, except the green wave, which counts through the time.
 """
@@ -65,8 +65,11 @@ def riders(ds: Dataset, p: MapPoint) -> float:
     """Riders/day at the point.
 
     Trail pieces and junctions: spring riders/day of the trail (the people the route serves when the heat
-    doesn't keep them away). Stations: only the people who dock there, capped at the trail's riders.
+    doesn't keep them away). Pieces off the trails: the assumed riders of their segment, set by the dataset.
+    Stations: only the people who dock there, capped at the nearest trail's riders.
     """
+    if p.kind == "segment":
+        return p.riders_day
     trail_riders = ds.trails[p.trail_id].riders_spring
     if p.kind == "station":
         return min(trail_riders, float(ds.assumptions["station_users_per_day"]))
@@ -77,7 +80,8 @@ def exposure_s(ds: Dataset, p: MapPoint, s: PointState) -> float:
     """Seconds a rider spends at the point."""
     a = ds.assumptions
     if p.kind == "segment":
-        return p.length_m * ds.trails[p.trail_id].length_scale / float(a["cycling_speed_ms"])
+        scale = ds.trails[p.trail_id].length_scale if p.trail_id is not None else 1.0
+        return p.length_m * scale / float(a["cycling_speed_ms"])
     if p.kind == "junction":
         return s.wait_s
     return float(a["station_dwell_s"])

@@ -4,22 +4,24 @@ The tables are filled by scripts/export_to_db.py. Everything the planner needs i
 mostly in SQL:
   - trails: the VAS-R1 routes linked to real streets (syn_segment_link, from scripts/trail_mapping.yaml),
     with their synthetic UTCI and rider counts
-  - trail pieces: every real cycle-lane segment on a trail's matched streets (a matched street with no
-    cycle-lane segment, e.g. a cycle street in a pedestrian zone or a park path, is taken whole);
-    segments over 100 m are split into ~50 m pieces
+  - pieces: every built segment of the real network, split into ~50 m pieces when over 100 m. A piece is on
+    a trail when its segment is one of the trail's cycle-lane segments on its matched streets (a matched
+    street with no cycle-lane segment, e.g. a cycle street in a pedestrian zone or a park path, is taken
+    whole); every other piece has no trail and takes the assumed riders of its segment (segment_metrics)
   - junctions (CRU-*): placed at the real feature named in their VAS-R1 name (config/point_anchors.yaml),
     because their synthetic coordinates are 140-850 m off the real streets
-  - stations: all real AMBici stations at their real location, on or off the trails. Each takes the
-    UTCI of the nearest trail and the solar index of the nearest street segment; the two VAS-R1
-    stations (EST-B01/B02) are matched to real ones (assumptions.yaml) and add their synthetic data
+  - stations: all real AMBici stations at their real location. Each takes the solar index and Landsat
+    surface temperature of the nearest street segment and the riders of the nearest trail; the two VAS-R1
+    stations (EST-B01/B02) are matched to real ones (assumptions.yaml) and carry their synthetic notes
   - fountains: real municipal fountains, cemetery excluded
-  - context network: the rest of the real network, drawn grey
   - parks (OpenStreetMap outlines) and Bicibox bike parkings (municipal facilities): display-only map layers
-  - surface temperature: Landsat 8/9 summer land surface temperature on every built segment (trails and the
-    rest of the network); a display-only layer, it never enters scores or KPIs
-  - sun anchors: percentiles of the solar index over the whole built network, so a sun score does not
-    depend on which trails are in scope
-  - local UTCI: the synthetic trail UTCI shifted by the real sun exposure of each piece
+  - surface temperature: Landsat 8/9 summer land surface temperature on every built segment; an input of
+    the UTCI model, also returned to the client as `surface_temp`
+  - sun anchors: percentiles of the solar index over the whole built network
+  - design weather: the hot-day summer afternoon from the real hourly weather (weather_hour)
+  - UTCI: computed per piece and station from the design weather, the share of direct sun (solar index)
+    and the ground temperature (Landsat) by services/heat_model.py; junctions keep the synthetic VAS-R1
+    value (trail UTCI plus their local anomaly)
 The services then work on this in memory; the API stays stateless.
 """
 
@@ -37,6 +39,7 @@ from shapely.geometry.base import BaseGeometry
 from sqlalchemy import Connection, text
 
 from app.db.session import engine
+from app.services.heat_model import DesignWeather, design_weather, place_heat
 
 APP_DIR = Path(__file__).resolve().parent.parent
 ASSUMPTIONS_FILE = APP_DIR / "config" / "assumptions.yaml"
@@ -54,11 +57,11 @@ MODAL_SHIFT_ID = "INT-08"  # not a fix: CO2 and € per replaced trip, used by t
 
 @dataclass(frozen=True)
 class MapPoint:
-    """A clickable location: a piece of trail ("segment"), a junction or a bike station."""
+    """A clickable location: a piece of a network segment ("segment"), a junction or a bike station."""
 
     id: str
     kind: str  # "segment" | "junction" | "station"
-    trail_id: str
+    trail_id: str | None  # VAS-R1 trail of a piece (None off the trails); the nearest trail of a station
     street: str
     length_m: float
     solar: float  # real solar index of the segment (unit not stated in the source)
@@ -66,7 +69,9 @@ class MapPoint:
     geom: BaseGeometry  # EPSG:25831
     mid: Point  # EPSG:25831, where an oasis would be placed
     raw: dict[str, Any] = field(repr=False)  # full record incl. WGS84 geometry for the client
-    segment_id: str | None = None  # real network segment a trail piece belongs to
+    segment_id: str | None = None  # real network segment a piece belongs to
+    lst_c: float | None = None  # Landsat summer surface temperature (own segment, or nearest for a station)
+    riders_day: float = 0.0  # pieces: riders/day the ranking and burden use (see metric_service.riders)
     wait_s: float = 0.0
     shade_pct: float = 0.0
     temp_anomaly_c: float = 0.0
@@ -115,13 +120,13 @@ class Dataset:
     modal_shift: dict[str, Any]
     assumptions: dict[str, Any]
     assumption_list: list[dict[str, Any]]
-    context_network: dict[str, Any]
     parks: dict[str, Any]  # GeoJSON FeatureCollection of OSM park outlines (WGS84), display only
     bike_parkings: list[dict[str, Any]]  # Bicibox secure bike parkings, display only
-    surface_temp: dict[str, Any]  # GeoJSON of built segments with Landsat summer LST (°C), display only
+    surface_temp: dict[str, Any]  # GeoJSON of built segments with Landsat summer LST (°C)
     solar_min: float  # sun score 0 (low percentile of the whole built network)
     solar_max: float  # sun score 1 (high percentile of the whole built network)
-    sun_heat_gap_c: float  # UTCI full sun minus full shade at the reference hour (hourly profile)
+    weather: DesignWeather  # the hot summer afternoon the UTCI model is evaluated for
+    off_trail_spring_ratio: float  # spring / summer riders over the trails, applied to off-trail pieces
     base_utci: dict[str, float]  # baseline UTCI per point
 
 
@@ -182,11 +187,34 @@ _TRAIL_SEGMENTS = f"""
     )
 """
 
+# Every built segment of the network, split like the trail segments; trail_id is NULL off the trails.
 _PIECES_SQL = f"""
-    WITH {_TRAIL_SEGMENTS}
+    WITH {_TRAIL_LINK},
+    network_segment AS (
+        SELECT l.trail_id, s.id, s.street_name, s.cycle_class, s.geom,
+               m.solar_mean, m.lst_summer_c, m.daily_cyclists_summer,
+               CASE WHEN ST_Length(s.geom) > :split_above
+                    THEN ceil(ST_Length(s.geom) / :piece_target)::int ELSE 1 END AS n
+        FROM cycle_segment s
+        JOIN segment_metrics m ON m.segment_id = s.id
+        LEFT JOIN trail_link l ON l.segment_id = s.id
+        WHERE s.cycle_class <> ALL(:excluded_classes)
+    ),
+    fountain AS (
+        SELECT geom FROM drinking_fountain
+        WHERE coalesce(trim(location_name), '') <> ALL(:excluded_fountains)
+    ),
+    piece AS (
+        SELECT t.trail_id, t.id AS segment_id, t.street_name, t.cycle_class, t.solar_mean, t.lst_summer_c,
+               t.daily_cyclists_summer, t.n, k,
+               CASE WHEN t.n = 1 THEN t.geom
+                    ELSE ST_LineSubstring(t.geom, (k - 1)::float8 / t.n, k::float8 / t.n) END AS geom
+        FROM network_segment t
+        CROSS JOIN LATERAL generate_series(1, t.n) AS k
+    )
     SELECT p.trail_id, p.segment_id, p.k, p.n, p.street_name, p.cycle_class,
            ST_Length(p.geom) AS length_m,
-           p.solar_mean AS solar,
+           p.solar_mean AS solar, p.lst_summer_c AS lst_c, p.daily_cyclists_summer AS riders_summer,
            ST_AsGeoJSON(p.geom, 2) AS utm,
            ST_AsGeoJSON(ST_Transform(p.geom, 4326), 6) AS wgs,
            ST_AsGeoJSON(ST_LineInterpolatePoint(p.geom, 0.5), 2) AS mid_utm,
@@ -259,7 +287,7 @@ _NODE_ATTRS_SQL = """
 """
 
 # Real AMBici stations at their own location. The nearest (clipped) trail piece gives the trail, whose
-# synthetic UTCI and riders the station takes; the nearest built street segment gives the solar index.
+# riders the station is capped at; the nearest built street segment gives the solar index and surface temperature.
 _STATIONS_SQL = f"""
     WITH {_TRAIL_SEGMENTS}
     SELECT a.station_num, a.name, a.address, a.bike_racks,
@@ -267,7 +295,7 @@ _STATIONS_SQL = f"""
            ST_AsGeoJSON(ST_Transform(a.geom, 4326), 6) AS wgs,
            (SELECT min(ST_Distance(a.geom, f.geom)) FROM fountain f) AS fountain_dist_m,
            trail.trail_id, trail.dist AS trail_dist_m,
-           street.id AS solar_segment_id, street.street_name, street.solar_mean AS solar
+           street.id AS solar_segment_id, street.street_name, street.solar_mean AS solar, street.lst_summer_c AS lst_c
     FROM ambici_station a
     CROSS JOIN LATERAL (
         SELECT p.trail_id, ST_Distance(p.geom, a.geom) AS dist FROM piece p
@@ -275,7 +303,7 @@ _STATIONS_SQL = f"""
         LIMIT 1
     ) trail
     CROSS JOIN LATERAL (
-        SELECT s.id, s.street_name, m.solar_mean FROM cycle_segment s
+        SELECT s.id, s.street_name, m.solar_mean, m.lst_summer_c FROM cycle_segment s
         JOIN segment_metrics m ON m.segment_id = s.id
         WHERE s.cycle_class <> ALL(:excluded_classes) AND m.solar_mean IS NOT NULL
         ORDER BY ST_Distance(s.geom, a.geom), s.id
@@ -327,16 +355,6 @@ _BIKE_PARKING_SQL = """
     ORDER BY id
 """
 
-_CONTEXT_SQL = f"""
-    WITH {_TRAIL_LINK}
-    SELECT s.is_cycle_candidate AS cycle,
-           ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(s.geom, 1.0), 4326), 6) AS geometry
-    FROM cycle_segment s
-    WHERE s.cycle_class <> ALL(:excluded_classes)
-      AND NOT EXISTS (SELECT 1 FROM trail_link l WHERE l.segment_id = s.id)
-    ORDER BY s.id
-"""
-
 _SURFACE_TEMP_SQL = f"""
     WITH {_TRAIL_LINK}
     SELECT s.id, s.street_name, m.lst_summer_c AS lst_c,
@@ -364,8 +382,8 @@ _SOLAR_ANCHORS_SQL = """
     WHERE s.cycle_class <> ALL(:excluded_classes) AND m.solar_mean IS NOT NULL
 """
 
-_HOURLY_SQL = """
-    SELECT utci_unshaded_asphalt_c AS sun, utci_shaded_park_c AS shade FROM hourly_profile WHERE hour = :hour
+_WEATHER_SQL = """
+    SELECT time, temp_c, rh_pct, wind_ms, ghi_wm2, dhi_wm2, direct_h_wm2, dni_wm2 FROM weather_hour ORDER BY time
 """
 
 
@@ -403,6 +421,8 @@ def _to_point(rec: dict[str, Any]) -> MapPoint:
         mid=Point(rec["mid_utm"]),
         raw=rec,
         segment_id=rec.get("segment_id"),
+        lst_c=None if rec.get("lst_c") is None else float(rec["lst_c"]),
+        riders_day=float(rec.get("riders_day", 0.0)),
         wait_s=float(rec.get("wait_s", 0.0)),
         shade_pct=float(rec.get("shade_pct", 0.0)),
         temp_anomaly_c=float(rec.get("temp_anomaly_c", 0.0)),
@@ -440,6 +460,8 @@ def _load_pieces(conn: Connection) -> list[dict[str, Any]]:
                 "cycle_class": r["cycle_class"],
                 "length_m": _num(r["length_m"], 2),
                 "solar": _num(r["solar"], 1),
+                "lst_c": None if r["lst_c"] is None else _num(r["lst_c"], 2),
+                "riders_summer": None if r["riders_summer"] is None else _num(r["riders_summer"]),
                 "utm": _coords(r["utm"]),
                 "mid_utm": _coords(r["mid_utm"])[0],
                 "wgs": _latlon(r["wgs"]),
@@ -513,7 +535,7 @@ def _load_stations(conn: Connection, matches: dict[int, str]) -> list[dict[str, 
         station = {
             "id": f"AMB-{r['station_num']}",
             "kind": "station",
-            "trail_id": r["trail_id"],  # nearest trail: the station takes its synthetic UTCI
+            "trail_id": r["trail_id"],  # nearest trail: the station's users are capped at its riders
             "street": r["street_name"],
             "name": r["name"],
             "address": r["address"],
@@ -521,6 +543,7 @@ def _load_stations(conn: Connection, matches: dict[int, str]) -> list[dict[str, 
             "length_m": 0.0,
             "solar": _num(r["solar"], 1),  # real solar index of the nearest street segment
             "solar_from": str(r["solar_segment_id"]),
+            "lst_c": None if r["lst_c"] is None else _num(r["lst_c"], 2),  # same segment's surface temperature
             "utm": utm,
             "mid_utm": utm[0],
             "wgs": wgs,
@@ -544,7 +567,7 @@ def _load_stations(conn: Connection, matches: dict[int, str]) -> list[dict[str, 
 def _load_trails(conn: Connection, points: list[dict[str, Any]]) -> list[dict[str, Any]]:
     trails = []
     for r in _rows(conn, _TRAILS_SQL):
-        real_len = sum(p["length_m"] for p in points if p["trail_id"] == r["id"] and p["kind"] == "segment")
+        real_len = sum(p["length_m"] for p in points if p["kind"] == "segment" and p["trail_id"] == r["id"])
         trails.append(
             {
                 "id": r["id"],
@@ -595,16 +618,6 @@ def _load_bike_parkings(conn: Connection) -> list[dict[str, Any]]:
     ]
 
 
-def _load_context(conn: Connection) -> dict[str, Any]:
-    return {
-        "type": "FeatureCollection",
-        "features": [
-            {"type": "Feature", "properties": {"cycle": bool(r["cycle"])}, "geometry": json.loads(r["geometry"])}
-            for r in _rows(conn, _CONTEXT_SQL)
-        ],
-    }
-
-
 def _load_surface_temp(conn: Connection) -> dict[str, Any]:
     return {
         "type": "FeatureCollection",
@@ -636,7 +649,7 @@ def _check(
     problems = []
     if not trails:
         problems.append("no trails (syn_segment_link is empty)")
-    if not any(p["kind"] == "segment" for p in points):
+    if not any(p["kind"] == "segment" and p["trail_id"] is not None for p in points):
         problems.append("no trail segments")
     if not any(p["kind"] == "station" for p in points):
         problems.append("no AMBici stations")
@@ -656,35 +669,35 @@ def _check(
         )
 
 
-def _base_utci(
-    points: list[MapPoint], trails: dict[str, Trail], solar_min: float, solar_max: float, gap_c: float
-) -> dict[str, float]:
-    """Baseline UTCI per point.
+def _heat(
+    points: list[MapPoint], trails: dict[str, Trail], solar_min: float, solar_max: float,
+    weather: DesignWeather, assumptions: dict[str, Any],
+) -> tuple[dict[str, float], dict[str, dict[str, Any]]]:
+    """Baseline UTCI per point and the inputs it was computed from.
 
-    Trail pieces: the synthetic trail UTCI shifted by how much sunnier or shadier the piece is than its
-    trail's length-weighted average (real solar index), times the full-sun minus full-shade UTCI gap of
-    the hourly profile. The trail's average stays equal to its synthetic UTCI.
-    Junctions and stations: trail UTCI plus their own synthetic local anomaly.
+    Pieces and stations: computed by heat_model from the design weather, the share of direct sun (the sun
+    score of the real solar index: its network 5th percentile is full shade, the 95th full sun) and the
+    ground temperature (Landsat; the network median where a segment has none).
+    Junctions: the synthetic VAS-R1 value, trail UTCI plus the junction's local anomaly.
     """
+    lst_known = sorted(p.lst_c for p in points if p.lst_c is not None)
+    lst_fallback = lst_known[len(lst_known) // 2] if lst_known else weather.temp_c
+    albedo = float(assumptions["ground_albedo"])
+    emissivity = float(assumptions["ground_emissivity"])
 
-    def sun(p: MapPoint) -> float:
-        return clamp01((p.solar - solar_min) / (solar_max - solar_min))
-
-    trail_sun: dict[str, float] = {}
-    for tid in trails:
-        pieces = [p for p in points if p.trail_id == tid and p.kind == "segment"]
-        total = sum(p.length_m for p in pieces)
-        trail_sun[tid] = sum(sun(p) * p.length_m for p in pieces) / total if total > 0 else 0.0
-
-    base = {}
+    base: dict[str, float] = {}
+    inputs: dict[str, dict[str, Any]] = {}
     for p in points:
-        utci = trails[p.trail_id].utci
-        if p.kind == "segment":
-            utci += gap_c * (sun(p) - trail_sun[p.trail_id])
-        else:
-            utci += p.temp_anomaly_c
-        base[p.id] = round(utci, 3)
-    return base
+        if p.kind == "junction":
+            utci = trails[p.trail_id].utci + p.temp_anomaly_c
+            base[p.id] = round(utci, 3)
+            inputs[p.id] = {"utci_source": "synthetic"}
+            continue
+        sun_share = clamp01((p.solar - solar_min) / (solar_max - solar_min))
+        heat = place_heat(weather, sun_share, p.lst_c if p.lst_c is not None else lst_fallback, albedo, emissivity)
+        base[p.id] = heat["utci_c"]
+        inputs[p.id] = {**heat, "utci_source": "computed"}
+    return base, inputs
 
 
 def load_dataset() -> Dataset:
@@ -697,7 +710,6 @@ def load_dataset() -> Dataset:
         points_raw = pieces + _load_nodes(conn, anchors) + _load_stations(conn, matches)
         trails_raw = _load_trails(conn, points_raw)
         fountains = _load_fountains(conn)
-        context = _load_context(conn)
         parks = _load_parks(conn)
         bike_parkings = _load_bike_parkings(conn)
         surface_temp = _load_surface_temp(conn)
@@ -706,18 +718,36 @@ def load_dataset() -> Dataset:
             conn, _SOLAR_ANCHORS_SQL,
             lo=float(assumptions["solar_low_pct"]) / 100, hi=float(assumptions["solar_high_pct"]) / 100,
         )[0]
-        hourly = _rows(conn, _HOURLY_SQL, hour=int(assumptions["heat_reference_hour"]))
+        weather_rows = _rows(conn, _WEATHER_SQL)
     _check(trails_raw, points_raw, catalogue, matches)
-    if not hourly:
-        raise RuntimeError("hourly_profile has no row for the reference hour. Run: python scripts/export_to_db.py")
+    if not weather_rows:
+        raise RuntimeError("weather_hour is empty. Run: python scripts/export_to_db.py")
+    weather = design_weather(
+        weather_rows,
+        hour=int(assumptions["heat_reference_hour"]),
+        hot_pct=float(assumptions["hot_day_percentile"]),
+        overpass_hours=[int(h) for h in assumptions["landsat_overpass_hours"]],
+    )
+
+    # Riders on a piece: its trail's spring riders; off the trails, the segment's assumed summer riders
+    # (class median of the matched streets, from the seed) scaled by the trails' spring / summer ratio.
+    trails = {t["id"]: Trail(id=t["id"], raw=t) for t in trails_raw}
+    summer = sum(t.riders_summer for t in trails.values())
+    spring_ratio = sum(t.riders_spring for t in trails.values()) / summer if summer > 0 else 1.0
+    for r in points_raw:
+        if r["kind"] != "segment":
+            continue
+        if r["trail_id"] is not None:
+            r["riders_day"] = trails[r["trail_id"]].riders_spring
+        else:
+            r["riders_day"] = round((r["riders_summer"] or 0.0) * spring_ratio, 1)
 
     points = [_to_point(r) for r in points_raw]
-    trails = {t["id"]: Trail(id=t["id"], raw=t) for t in trails_raw}
     solar_min, solar_max = float(solar["lo"]), float(solar["hi"])
-    gap_c = float(hourly[0]["sun"]) - float(hourly[0]["shade"])
-    base_utci = _base_utci(points, trails, solar_min, solar_max, gap_c)
+    base_utci, heat_inputs = _heat(points, trails, solar_min, solar_max, weather, assumptions)
     for r in points_raw:
         r["utci_base_c"] = base_utci[r["id"]]
+        r.update(heat_inputs[r["id"]])
 
     pieces_by_segment: dict[str, list[MapPoint]] = {}
     for p in points:
@@ -734,13 +764,13 @@ def load_dataset() -> Dataset:
         modal_shift=catalogue[MODAL_SHIFT_ID],
         assumptions=assumptions,
         assumption_list=assumption_list,
-        context_network=context,
         parks=parks,
         bike_parkings=bike_parkings,
         surface_temp=surface_temp,
         solar_min=solar_min,
         solar_max=solar_max,
-        sun_heat_gap_c=gap_c,
+        weather=weather,
+        off_trail_spring_ratio=spring_ratio,
         base_utci=base_utci,
     )
 

@@ -7,6 +7,7 @@ from shapely.geometry import shape
 from app.main import app
 from app.services.dataset import get_dataset
 from app.services.effect_service import PlanError, baseline_state, plan_state, validate_plan
+from app.services.heat_model import place_heat
 from app.services.metric_service import burden, exposure_s, score_point
 from app.services.planner_service import auto_plan, evaluate, recommend
 
@@ -25,6 +26,44 @@ def test_dataset_shape():
     assert {p.kind for p in ds.points} == {"segment", "junction", "station"}
     assert all(p.length_m <= 100 for p in ds.points if p.kind == "segment")
     assert all(any(p.trail_id == t for p in ds.points) for t in ds.trails)
+
+
+def test_every_built_segment_is_a_point():
+    """The planner covers the whole built network, not only the VAS-R1 trails."""
+    assert len(ds.pieces_by_segment) == 1034  # 1037 segments minus the 3 planned DIBA lines
+    pieces = [p for p in ds.points if p.kind == "segment"]
+    off = [p for p in pieces if p.trail_id is None]
+    assert off and len(off) < len(pieces)
+    base = baseline_state(ds)
+    for p in off[:50]:
+        assert p.riders_day == pytest.approx(p.raw["riders_summer"] * ds.off_trail_spring_ratio, abs=0.05)
+        assert exposure_s(ds, p, base[p.id]) == pytest.approx(p.length_m / A["cycling_speed_ms"])  # no trail scaling
+    validate_plan(ds, [("INT-01", off[0].id), ("INT-03", off[0].id)], 1e9)  # fixes are allowed off the trails
+
+
+def test_utci_is_computed_from_weather_sun_and_ground():
+    """Pieces and stations: UTCI from the hot-day weather, local sun and Landsat ground temperature."""
+    w = ds.weather
+    assert w.hour == A["heat_reference_hour"] and 0 < w.days < w.days_total
+    assert 25 < w.temp_c < 40 and 0 < w.cos_zenith <= 1
+    albedo, emissivity = A["ground_albedo"], A["ground_emissivity"]
+    sunny = place_heat(w, 1.0, 45.0, albedo, emissivity)["utci_c"]
+    shaded = place_heat(w, 0.0, 45.0, albedo, emissivity)["utci_c"]
+    cool_ground = place_heat(w, 1.0, 38.0, albedo, emissivity)["utci_c"]
+    assert sunny > shaded and sunny > cool_ground
+    assert shaded > w.temp_c  # a hot afternoon is above air temperature even in shade (warm ground)
+    for p in ds.points:
+        if p.kind == "junction":
+            continue
+        sun_share = min(1.0, max(0.0, (p.solar - ds.solar_min) / (ds.solar_max - ds.solar_min)))
+        expected = place_heat(w, sun_share, p.lst_c, albedo, emissivity)["utci_c"]
+        assert ds.base_utci[p.id] == pytest.approx(expected) and p.raw["utci_source"] == "computed"
+
+
+def test_junctions_keep_the_synthetic_utci():
+    for p in (q for q in ds.points if q.kind == "junction"):
+        assert ds.base_utci[p.id] == pytest.approx(ds.trails[p.trail_id].utci + p.temp_anomaly_c)
+        assert p.raw["utci_source"] == "synthetic"
 
 
 def test_context_layers():
@@ -60,14 +99,9 @@ def test_all_real_ambici_stations_are_points():
     stations = [p for p in ds.points if p.kind == "station"]
     assert len(stations) == 17
     assert all(p.id.startswith("AMB-") and p.raw["trail_id"] in ds.trails for p in stations)
-    base = baseline_state(ds)
     vas = {p.raw["vas_id"]: p for p in stations if "vas_id" in p.raw}
     assert {k: v.id for k, v in vas.items()} == {"EST-B01": "AMB-34863", "EST-B02": "AMB-34868"}
-    for p in vas.values():  # the matched stations add their synthetic temperature anomaly
-        assert p.temp_anomaly_c > 0
-        assert math.isclose(base[p.id].utci, ds.trails[p.trail_id].utci + p.temp_anomaly_c)
-    plain = next(p for p in stations if "vas_id" not in p.raw)
-    assert math.isclose(base[plain.id].utci, ds.trails[plain.trail_id].utci)
+    assert all(p.lst_c is not None for p in stations)  # heat from the nearest street's Landsat temperature
     validate_plan(ds, [("INT-06", p.id) for p in stations], 1e9)  # a canopy fits every station
 
 
@@ -185,7 +219,7 @@ def test_trail_utci_drop_weights_cooled_sections_by_length():
 
 
 def test_cooling_a_hot_trail_makes_it_comfortable():
-    trail = "TRM-04"  # UTCI 34.5 °C, minus trees 4.5 and half of cool pavement 1.8 = 29.1 < 32
+    trail = "TRM-04"  # computed UTCI ~35.6 °C, minus trees 4.5 and half of cool pavement 1.8 = ~30.2 < 32
     segs = [ps[0].id for ps in ds.pieces_by_segment.values() if ps[0].trail_id == trail]  # one per real segment
     accepted = [("INT-01", s) for s in segs] + [("INT-04", s) for s in segs]
     k = evaluate(ds, "heat", 1e7, accepted)["kpis"]
@@ -197,18 +231,17 @@ def test_cooling_a_hot_trail_makes_it_comfortable():
     assert math.isclose(k["adapted_km"], real_km, abs_tol=1e-3)
 
 
-def test_trees_lift_a_very_hot_piece_out_of_very_strong_heat():
-    # TRM-02 is 40.1 °C on average; trees (−4.5 °C) cover the whole real segment. Pick a segment whose
-    # pieces are all in very strong heat today and all drop below 38 °C, but stay above 32 °C.
+def test_trees_lift_a_very_hot_piece_out_of_very_strong_heat(monkeypatch):
+    # On the model's hot afternoon no street reaches 38 °C, so the threshold is lowered into the network's
+    # range. Trees (−4.5 °C) cover the whole real segment: pick one whose pieces are all above the threshold
+    # today and all drop below it, but stay above 32 °C.
+    monkeypatch.setitem(A, "strong_heat_utci_c", 37.0)
     cut = -ds.catalogue["INT-01"]["utci_reduction_c"]
 
     def lifted(u: float) -> bool:
         return u >= A["strong_heat_utci_c"] and A["comfortable_utci_c"] <= u - cut < A["strong_heat_utci_c"]
 
-    pieces = next(
-        ps for ps in ds.pieces_by_segment.values()
-        if ps[0].trail_id == "TRM-02" and all(lifted(ds.base_utci[p.id]) for p in ps)
-    )
+    pieces = next(ps for ps in ds.pieces_by_segment.values() if all(lifted(ds.base_utci[p.id]) for p in ps))
     k = evaluate(ds, "heat", 1e7, [("INT-01", pieces[0].id)])["kpis"]
     gain = k["after"]["below_strong_heat_km"] - k["before"]["below_strong_heat_km"]
     assert gain == pytest.approx(sum(p.length_m for p in pieces) / 1000)

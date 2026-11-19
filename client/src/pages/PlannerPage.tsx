@@ -11,7 +11,6 @@ import PointDrawer from '../components/PointDrawer.tsx'
 import PointTypeFilter from '../components/PointTypeFilter.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
-import { METRIC_SHORT } from '../lib/icons.tsx'
 import { POINT_KINDS, rankWorst } from '../lib/points.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
@@ -116,7 +115,7 @@ export default function PlannerPage() {
       key={selected.id}
       placement={wide ? 'popup' : 'overlay'}
       point={selected}
-      trail={pl.trailsById.get(selected.trail_id)}
+      trail={selected.trail_id ? pl.trailsById.get(selected.trail_id) : undefined}
       result={pl.resultsById.get(selected.id)}
       metric={ev?.metric ?? pl.metric}
       isWorst={selected.id === worstId}
@@ -135,10 +134,6 @@ export default function PlannerPage() {
       onUndo={pl.undo}
       onReset={pl.reset}
       onSelect={select}
-      onAutoPlan={pl.autoPlan}
-      autoPlanning={pl.autoPlanning}
-      metricLabel={METRIC_SHORT[ev.metric]}
-      remaining={ev.budget.remaining}
       busy={pl.evaluating}
     />
   )

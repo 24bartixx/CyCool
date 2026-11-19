@@ -15,6 +15,7 @@ from app.models.segment_metrics import SegmentMetrics
 from app.models.syn_point import SynPoint
 from app.models.syn_segment import SynSegment
 from app.models.syn_segment_link import SynSegmentLink
+from app.models.weather_hour import WeatherHour
 
 __all__ = [
     "SRID",
@@ -33,4 +34,5 @@ __all__ = [
     "SynPoint",
     "SynSegment",
     "SynSegmentLink",
+    "WeatherHour",
 ]

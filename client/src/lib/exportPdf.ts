@@ -107,7 +107,7 @@ function coverageRow(
 
 function placeDetail(p: MapPointInfo): string {
   if (p.kind === "segment")
-    return `Trail piece ${p.id} · ${metres(p.length_m)} long`;
+    return `Street piece ${p.id} · ${metres(p.length_m)} long`;
   if (p.kind === "junction")
     return `Traffic-light junction ${p.id} · approximate location`;
   const off = isOffTrail(p)
@@ -260,7 +260,7 @@ export function buildPlanPdf({
     doc,
     y,
     "1. What the plan changes",
-    'Recalculated from the accepted fixes over all trail pieces, junctions and bike stations. "Today" is the network with no fix applied.',
+    'Recalculated from the accepted fixes over all street pieces, junctions and bike stations. "Today" is the network with no fix applied.',
   );
   y = table(doc, y + 1, {
     head: [["Indicator", "Today", "With the plan", "Change"]],
@@ -277,19 +277,19 @@ export function buildPlanPdf({
         `Comfortable trail length (UTCI below ${comfortC ?? "?"} °C)`,
         k.before.comfortable_km,
         k.after.comfortable_km,
-        k.after.trail_km,
+        k.after.network_km,
       ),
       coverageRow(
         `Out of very strong heat (UTCI below ${strongHeatC ?? "?"} °C)`,
         k.before.below_strong_heat_km,
         k.after.below_strong_heat_km,
-        k.after.trail_km,
+        k.after.network_km,
       ),
       coverageRow(
         `Drinking water within ${waterM ?? "?"} m`,
         k.before.water_reachable_km,
         k.after.water_reachable_km,
-        k.after.trail_km,
+        k.after.network_km,
       ),
     ],
     columnStyles: {
@@ -307,7 +307,7 @@ export function buildPlanPdf({
       [
         "Average UTCI drop where the plan cools",
         cooled
-          ? `-${celsius(k.utci_drop_trail_avg_c)} on ${km(k.utci_cooled_trail_km)} of ${km(k.after.trail_km)} of trails`
+          ? `-${celsius(k.utci_drop_trail_avg_c)} on ${km(k.utci_cooled_trail_km)} of ${km(k.after.network_km)} of network`
           : "no trail section cooled",
       ],
       [
@@ -329,7 +329,7 @@ export function buildPlanPdf({
       [
         "Cost per km adapted (trees, cool pavement)",
         k.eur_per_adapted_km == null
-          ? `${DASH} (no trail piece got trees or cool pavement)`
+          ? `${DASH} (no street piece got trees or cool pavement)`
           : `${eur(k.eur_per_adapted_km)} per km on ${km(k.adapted_km)}`,
       ],
       [
@@ -421,7 +421,7 @@ export function buildPlanPdf({
     head: [["#", "Fix", "Place", "Trail", "Coordinates", "Cost"]],
     body: ev.plan.map((f, i) => {
       const p = pointsById.get(f.point_id);
-      const trail = p && trailsById.get(p.trail_id);
+      const trail = p?.trail_id ? trailsById.get(p.trail_id) : undefined;
       return [
         String(i + 1),
         `${f.label}\n${f.fix_id}`,
