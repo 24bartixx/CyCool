@@ -37,7 +37,7 @@ import type {
 import { dec2, metres } from "../lib/format.ts";
 import { FIX_ICON, METRIC_SHORT } from "../lib/icons.tsx";
 import { isOffTrail, pointTitle } from "../lib/points.ts";
-import { cssVar, scoreColor } from "../lib/scale.ts";
+import { cssVar, scoreColor as colorFor, useScoreScale } from "../lib/scale.ts";
 import Legend from "./Legend.tsx";
 
 type Props = {
@@ -222,10 +222,15 @@ function syncSize(map: L.Map, lastLeft: RefObject<number | undefined>) {
   if (shift) map.panBy([shift, 0], { animate: false });
 }
 
-/** Width of the lanes' score lines, at every zoom. */
-const LANE_PX = 7;
-/** Width of a lane left out of "Where to look": grey, thinner than a score line, thicker than the rest of the network. */
-const MUTED_LANE_PX = 4;
+/**
+ * Width of the lanes' score lines at street level (FOCUS_ZOOM and closer). Zoomed out they get 1 px thinner per
+ * zoom level, down to LANE_MIN_PX, so lanes next to each other don't run into one another.
+ */
+const LANE_PX = 6;
+const LANE_MIN_PX = 3;
+/** A lane left out of "Where to look" is grey and this share of a score line's width (at least MUTED_LANE_MIN_PX). */
+const MUTED_LANE_SHARE = 0.6;
+const MUTED_LANE_MIN_PX = 1.5;
 /** Width of the solid selection-coloured line drawn over the selected segment, at street level (see SegmentHighlight). */
 const SELECTED_LINE_PX = 19;
 const HOVERED_LINE_PX = 13;
@@ -588,7 +593,7 @@ function SegmentHighlight({
 
 /** Pane of the street network's score lines. */
 const TRAILS_PANE = "trails";
-/** Width of the invisible line over each score line that takes its clicks: easier to hit than the 7 px line. */
+/** Width of the invisible line over each score line that takes its clicks: easier to hit than the thin score line. */
 const HIT_LINE_PX = 20;
 
 /** A street piece's tooltip as a DOM node (street names are shown as text, never parsed as HTML). */
@@ -636,6 +641,11 @@ const NetworkLines = memo(function NetworkLines({
   onSelect: (id: string) => void;
 }) {
   const map = useMap();
+  // the class bounds array is stable (from context), unlike a colour function made per render
+  const { breaks } = useScoreScale(metric);
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvent("zoomend", () => setZoom(map.getZoom()));
+  const laneWidth = clamp(LANE_PX - (FOCUS_ZOOM - zoom), LANE_MIN_PX, LANE_PX);
   const lines = useRef(
     new Map<string, { line: L.Polyline; hit: L.Polyline }>(),
   );
@@ -699,14 +709,16 @@ const NetworkLines = memo(function NetworkLines({
     for (const [id, { line, hit }] of lines.current) {
       const r = results.get(id);
       const off = muted && id !== keepId;
-      const color = r && !off ? scoreColor(r.scores[metric]) : neutral;
-      const weight = off ? MUTED_LANE_PX : LANE_PX;
+      const color = r && !off ? colorFor(r.scores[metric], breaks) : neutral;
+      const weight = off
+        ? Math.max(MUTED_LANE_MIN_PX, laneWidth * MUTED_LANE_SHARE)
+        : laneWidth;
       if (line.options.color !== color || line.options.weight !== weight)
         line.setStyle({ color, weight });
       // a tooltip open under the pointer shows the new score right away
       if (hit.isTooltipOpen()) hit.getTooltip()?.update();
     }
-  }, [segments, results, metric, muted, keepId]);
+  }, [segments, results, metric, muted, keepId, breaks, laneWidth]);
 
   return null;
 });
@@ -778,6 +790,7 @@ export default function MapView({
     return m;
   }, [evaluation]);
 
+  const scoreColor = useScoreScale(metric).color;
   const neutral = cssVar("--color-network");
   const water = cssVar("--color-water");
   const park = cssVar("--color-park");

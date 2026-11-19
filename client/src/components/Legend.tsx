@@ -1,7 +1,8 @@
 import { Droplet } from "lucide-react";
 import type { MetricId } from "../api/planner.ts";
+import { dec2 } from "../lib/format.ts";
 import { METRIC_SHORT } from "../lib/icons.tsx";
-import { SCORE_CLASSES, cssVar } from "../lib/scale.ts";
+import { SCORE_CLASSES, classRange, cssVar, useScoreScale } from "../lib/scale.ts";
 
 type Props = {
   metric: MetricId;
@@ -10,6 +11,7 @@ type Props = {
 };
 
 export default function Legend({ metric, filtered = false }: Props) {
+  const { breaks } = useScoreScale(metric);
   return (
     <div
       data-map-overlay
@@ -19,7 +21,7 @@ export default function Legend({ metric, filtered = false }: Props) {
         {METRIC_SHORT[metric]} score
       </p>
       <ul className="space-y-0.5">
-        {SCORE_CLASSES.map((c) => (
+        {SCORE_CLASSES.map((c, i) => (
           <li key={c.key} className="flex items-center gap-2">
             <span
               className="h-1.5 w-5 rounded-full"
@@ -27,7 +29,9 @@ export default function Legend({ metric, filtered = false }: Props) {
               aria-hidden
             />
             <span className="w-16 text-foreground">{c.label}</span>
-            <span className="tabular-nums text-muted">{c.range}</span>
+            <span className="tabular-nums text-muted">
+              {i === 0 ? `< ${dec2(classRange(0, breaks)[1])}` : classRange(i, breaks).map(dec2).join("–")}
+            </span>
           </li>
         ))}
       </ul>

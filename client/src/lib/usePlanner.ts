@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { computeBreaks, type ScoreBreaks } from "./scale.ts";
 import { useSearchParams } from "react-router";
 import { ApiError } from "../api/client.ts";
 import {
@@ -72,6 +73,7 @@ export function usePlanner() {
     loading: false,
   });
   const lastGood = useRef<AcceptedFix[]>([]);
+  const [scoreBreaks, setScoreBreaks] = useState<ScoreBreaks>({});
 
   // ---- static map data (once, with retry) ----
   useEffect(() => {
@@ -84,6 +86,24 @@ export function usePlanner() {
       );
     return () => ctrl.abort();
   }, [mapReload]);
+
+  // ---- map colour classes: from today's scores (no fixes), once, so a fix still turns a point greener ----
+  useEffect(() => {
+    if (!mapData.data) return;
+    const ctrl = new AbortController();
+    postEvaluate({ metric: "combined", budget: DEFAULT_BUDGET, accepted: [] }, ctrl.signal)
+      .then((today) =>
+        setScoreBreaks(
+          Object.fromEntries(
+            METRICS.map((m) => [m, computeBreaks(today.points.map((p) => p.scores[m]))]),
+          ),
+        ),
+      )
+      .catch(() => {
+        /* the map falls back to even score classes */
+      });
+    return () => ctrl.abort();
+  }, [mapData.data]);
 
   // ---- evaluation: recomputed from scratch whenever metric, budget or the plan changes ----
   useEffect(() => {
@@ -224,5 +244,6 @@ export function usePlanner() {
     pointsById,
     trailsById,
     resultsById,
+    scoreBreaks,
   };
 }

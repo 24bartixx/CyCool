@@ -9,7 +9,7 @@ import type {
 import { celsius, int, metres } from "../lib/format.ts";
 import { METRIC_ICON, METRIC_SHORT } from "../lib/icons.tsx";
 import { KIND_LABEL, pointSubtitle, pointTitle } from "../lib/points.ts";
-import { scoreColor } from "../lib/scale.ts";
+import { useScoreScale } from "../lib/scale.ts";
 import ScoreChip from "./ScoreChip.tsx";
 
 const PLACEMENT = {
@@ -41,6 +41,7 @@ function MetricRow(props: {
 }) {
   const { metric, active, score, detail, dense } = props;
   const Icon = METRIC_ICON[metric];
+  const scale = useScoreScale(metric);
   return (
     <div
       className={`rounded-lg px-2.5 ${dense ? "py-1.5" : "py-2"} ${active ? "bg-primary-soft ring-1 ring-primary/30" : ""}`}
@@ -52,7 +53,7 @@ function MetricRow(props: {
         />
         <span className="text-sm font-medium">{METRIC_SHORT[metric]}</span>
         <span className="ml-auto">
-          <ScoreChip score={score} showLabel />
+          <ScoreChip score={score} metric={metric} showLabel />
         </span>
       </div>
       <div
@@ -63,7 +64,7 @@ function MetricRow(props: {
           className="h-full rounded-full"
           style={{
             width: `${Math.max(2, score * 100)}%`,
-            background: scoreColor(score),
+            background: scale.color(score),
           }}
         />
       </div>

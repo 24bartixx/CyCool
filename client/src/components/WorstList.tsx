@@ -148,7 +148,7 @@ function WorstList({
                       />
                     </span>
                   </span>
-                  <ScoreChip score={r.scores[metric]} />
+                  <ScoreChip score={r.scores[metric]} metric={metric} />
                 </button>
               </li>
             );
