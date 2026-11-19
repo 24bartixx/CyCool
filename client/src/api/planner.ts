@@ -103,6 +103,8 @@ export type Kpis = {
   utci_drop_avg_c: number | null
   utci_drop_max_c: number | null
   points_cooled: number
+  utci_drop_trail_avg_c: number | null
+  utci_cooled_trail_km: number
   co2_t_per_year: number
   capex_eur: number
   opex_eur_per_year: number

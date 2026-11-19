@@ -119,6 +119,22 @@ def test_kpis_without_plan_have_no_ratios():
     k = evaluate(ds, "heat", 50_000, [])["kpis"]
     assert k["eur_per_comfortable_km"] is None
     assert k["utci_drop_avg_c"] is None and k["capex_eur"] == 0
+    assert k["utci_drop_trail_avg_c"] is None and k["utci_cooled_trail_km"] == 0
+
+
+def test_trail_utci_drop_weights_cooled_sections_by_length():
+    segments = [p for p in ds.points if p.kind == "segment"]
+    short = min(segments, key=lambda p: p.length_m)
+    long = max(segments, key=lambda p: p.length_m)
+    junction = first("junction")
+    accepted = [("INT-01", short.id), ("INT-04", short.id), ("INT-04", long.id), ("INT-02", junction.id)]
+    k = evaluate(ds, "heat", 50_000, accepted)["kpis"]
+
+    pavement_drop = -ds.catalogue["INT-04"]["utci_reduction_c"]
+    short_drop = pavement_drop - ds.catalogue["INT-01"]["utci_reduction_c"]
+    cooled_m = short.length_m + long.length_m
+    assert k["utci_cooled_trail_km"] == pytest.approx(cooled_m / 1000)
+    assert k["utci_drop_trail_avg_c"] == pytest.approx((short_drop * short.length_m + pavement_drop * long.length_m) / cooled_m)
 
 
 def test_cooling_a_hot_trail_makes_it_comfortable():

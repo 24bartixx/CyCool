@@ -33,7 +33,18 @@ def compute_kpis(
     before = _network_state_kpis(ds, base)
     after = _network_state_kpis(ds, now)
 
-    drops = [base[pid].utci - now[pid].utci for pid in now if base[pid].utci - now[pid].utci > 1e-9]
+    drops = []
+    cooled_trail_m = 0.0
+    weighted_trail_drop = 0.0
+    for point in ds.points:
+        drop = base[point.id].utci - now[point.id].utci
+        if drop <= 1e-9:
+            continue
+        drops.append(drop)
+        if point.kind == "segment":
+            cooled_trail_m += point.length_m
+            weighted_trail_drop += drop * point.length_m
+
     capex = sum(f.cost_eur for f in plan)
     opex = sum(f.opex_eur_yr for f in plan)
     sequestration_kg = sum(f.co2_kg_yr for f in plan)
@@ -46,6 +57,8 @@ def compute_kpis(
         "utci_drop_avg_c": sum(drops) / len(drops) if drops else None,
         "utci_drop_max_c": max(drops) if drops else None,
         "points_cooled": len(drops),
+        "utci_drop_trail_avg_c": _ratio(weighted_trail_drop, cooled_trail_m),
+        "utci_cooled_trail_km": cooled_trail_m / 1000,
         "co2_t_per_year": sequestration_kg / 1000,
         "capex_eur": capex,
         "opex_eur_per_year": opex,

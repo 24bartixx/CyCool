@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { Bike, Target, TrafficCone } from "lucide-react";
+import { Bike, House, Target, TrafficCone } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -60,13 +60,13 @@ const iconCache = new Map<string, L.DivIcon>();
 function nodeIcon(
   kind: "junction" | "station",
   color: string,
-  selected: boolean,
+  highlight: "selected" | "hovered" | undefined,
 ): L.DivIcon {
-  const key = `${kind}|${color}|${selected}`;
+  const key = `${kind}|${color}|${highlight}`;
   const hit = iconCache.get(key);
   if (hit) return hit;
   const Glyph = kind === "junction" ? TrafficCone : Bike;
-  const html = `<div class="cc-marker cc-marker--${kind}${selected ? " cc-marker--selected" : ""}" style="width:24px;height:24px;background:${color}">${renderToStaticMarkup(
+  const html = `<div class="cc-marker cc-marker--${kind}${highlight ? ` cc-marker--${highlight}` : ""}" style="width:24px;height:24px;background:${color}">${renderToStaticMarkup(
     <Glyph size={13} strokeWidth={2.5} aria-hidden />,
   )}</div>`;
   // stations are drawn up-right of their position so they never hide a junction on the same spot
@@ -396,37 +396,77 @@ function FollowLayout({
   return null;
 }
 
+/** Extra width of the soft glow around the selected line, beyond its casing. */
+const GLOW_PX = 10;
+/** Below this core width the flowing dashes would crowd the core; they are left out. */
+const FLOW_MIN_CORE_PX = 6;
+
 /**
- * A solid line over a segment, covering its score line (the popup and tooltip still show the score). Its width is
- * `weight` at street level (FOCUS_ZOOM) and narrows by 4 px per zoom level out, down to just wider than the lane:
- * zoomed out, a 50 m segment is only a few pixels long, and a full-width line would swamp it.
+ * A line over a segment, `weight` wide at street level (FOCUS_ZOOM), narrowing by 4 px per zoom level out down to
+ * just wider than the lane: zoomed out, a 50 m segment is only a few pixels long, and a full-width line would
+ * swamp it.
+ *
+ * Without `core` it is one solid line (hover). With `core` (the segment's score colour) it is the selection: a
+ * soft glow, an outline in `color`, a white gap, the score colour kept inside it (the same as the marker ring), and white
+ * dashes flowing along it, like traffic in the lane (still under prefers-reduced-motion, see .cc-flow).
  */
 function SegmentHighlight({
   point,
   color,
   weight,
+  core,
 }: {
   point?: MapPointInfo;
   color: string;
   weight: number;
+  core?: string;
 }) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvent("zoomend", () => setZoom(map.getZoom()));
   if (point?.kind !== "segment") return null;
-  const w = clamp(weight - (FOCUS_ZOOM - zoom) * 4, LANE_PX + 2, weight);
-  return (
+  const w = Math.round(
+    clamp(weight - (FOCUS_ZOOM - zoom) * 4, LANE_PX + 2, weight),
+  );
+  const line = (key: string, options: L.PathOptions) => (
     <Polyline
+      key={key}
       positions={point.wgs}
       pathOptions={{
-        color,
-        weight: Math.round(w),
         opacity: 1,
         lineCap: "round",
         lineJoin: "round",
+        ...options,
       }}
       interactive={false}
     />
+  );
+  if (!core) return line("solid", { color, weight: w });
+
+  // Leaflet stacks lines in a pane in the order they are added, so these are always rendered in this order.
+  const coreW = Math.max(3, Math.round(w * 0.45));
+  // A white gap between the outline and the score colour, like the marker's white border: indigo right against
+  // the dark scores buzzed. Zoomed out there is no room for it next to a visible outline; it is hidden then.
+  const gapShown = w - coreW >= 8;
+  return (
+    <>
+      {line("glow", { color, weight: w + GLOW_PX, opacity: 0.22 })}
+      {line("casing", { color, weight: w })}
+      {line("gap", {
+        color: "#fff",
+        weight: coreW + 4,
+        opacity: gapShown ? 1 : 0,
+      })}
+      {line("core", { color: core, weight: coreW })}
+      {line("flow", {
+        color: "#fff",
+        weight: 2.5,
+        dashArray: "3 9",
+        className: "cc-flow",
+        // with too thin a core the dashes would crowd it: hide them (kept mounted, so the stacking order holds)
+        opacity: coreW >= FLOW_MIN_CORE_PX ? 0.95 : 0,
+      })}
+    </>
   );
 }
 
@@ -458,6 +498,7 @@ export default function MapView({
   onClosePopup,
 }: Props) {
   const popupRef = useRef<L.Popup>(null);
+  const [map, setMap] = useState<L.Map | null>(null);
   const [showContext, setShowContext] = useState(true);
   const [showFountains, setShowFountains] = useState(true);
   const [showReach, setShowReach] = useState(false);
@@ -467,7 +508,7 @@ export default function MapView({
     [evaluation],
   );
   const bounds = useMemo(
-    () => L.latLngBounds(mapData.points.flatMap((p) => p.wgs)).pad(0.08),
+    () => L.latLngBounds(mapData.points.flatMap((p) => p.wgs)).pad(0.3),
     [mapData.points],
   );
   const segments = mapData.points.filter((p) => p.kind === "segment");
@@ -496,8 +537,12 @@ export default function MapView({
 
   const neutral = cssVar("--color-network");
   const water = cssVar("--color-water");
-  const primary = cssVar("--color-primary");
   const selection = cssVar("--color-selection");
+  const selectionHover = cssVar("--color-selection-hover");
+  const selectedResult = selected ? results.get(selected.id) : undefined;
+  const selectedCore = selectedResult
+    ? scoreColor(selectedResult.scores[metric])
+    : neutral;
 
   const scoreLine = (p: MapPointInfo) => {
     const r = results.get(p.id);
@@ -519,6 +564,7 @@ export default function MapView({
   return (
     <div className="@container relative h-full w-full">
       <MapContainer
+        ref={setMap}
         bounds={bounds}
         className="h-full w-full"
         zoomSnap={0.5}
@@ -621,7 +667,7 @@ export default function MapView({
           {hovered?.id !== selected?.id && (
             <SegmentHighlight
               point={hovered}
-              color={primary}
+              color={selectionHover}
               weight={HOVERED_LINE_PX}
             />
           )}
@@ -631,6 +677,7 @@ export default function MapView({
             point={selected}
             color={selection}
             weight={SELECTED_LINE_PX}
+            core={selectedCore}
           />
         </Pane>
 
@@ -662,19 +709,25 @@ export default function MapView({
         {nodes.map((p) => {
           const r = results.get(p.id);
           const color = r ? scoreColor(r.scores[metric]) : neutral;
+          const highlight =
+            p.id === selectedId
+              ? "selected"
+              : p.id === hoveredId
+                ? "hovered"
+                : undefined;
           return (
             <Marker
               key={p.id}
               position={p.mid_wgs}
-              icon={nodeIcon(
-                p.kind,
-                color,
-                p.id === selectedId || p.id === hoveredId,
-              )}
+              icon={nodeIcon(p.kind, color, highlight)}
               eventHandlers={{ click: () => onSelect(p.id) }}
               keyboard
               title={pointTitle(p)}
-              zIndexOffset={p.kind === "station" ? 100 : 0}
+              // the highlighted marker's ring sits above its neighbours (but under the fix badges at 500)
+              zIndexOffset={
+                (p.kind === "station" ? 100 : 0) +
+                (highlight === "selected" ? 300 : highlight ? 200 : 0)
+              }
             >
               <Tooltip className="cc-tooltip" direction="top" offset={[0, -14]}>
                 <strong>{pointTitle(p)}</strong>
@@ -725,6 +778,25 @@ export default function MapView({
         >
           <Target className="size-4" aria-hidden />
           Go to worst point
+        </button>
+      )}
+
+      {map && (
+        <button
+          type="button"
+          data-map-overlay
+          onClick={() => {
+            const animate = !window.matchMedia(
+              "(prefers-reduced-motion: reduce)",
+            ).matches;
+            if (animate) map.flyToBounds(bounds, { duration: 0.8 });
+            else map.fitBounds(bounds, { animate: false });
+          }}
+          title="Back to the default view"
+          aria-label="Back to the default view"
+          className="absolute bottom-8 right-3 z-[1000] inline-flex size-10 items-center justify-center rounded-lg border border-border bg-surface text-primary shadow-sm hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <House className="size-4" aria-hidden />
         </button>
       )}
 

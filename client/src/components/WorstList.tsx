@@ -3,7 +3,8 @@ import type { MapPointInfo, MetricId, PointResult } from "../api/planner.ts";
 import { KIND_SHORT, pointTitle } from "../lib/points.ts";
 import ScoreChip from "./ScoreChip.tsx";
 
-const TOP_OPTIONS = [10, 25, 50, 100] as const;
+// Infinity = "All"; it round-trips through localStorage and <option value> as "Infinity".
+const TOP_OPTIONS = [25, 50, 100, Infinity] as const;
 const TOP_KEY = "cc.worstTop";
 
 function readTop(): number {
@@ -87,7 +88,7 @@ export default function WorstList({
             >
               {TOP_OPTIONS.map((n) => (
                 <option key={n} value={n}>
-                  Show top {n}
+                  {n === Infinity ? "Show all" : `Show top ${n}`}
                 </option>
               ))}
             </select>

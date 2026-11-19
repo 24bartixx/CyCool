@@ -11,3 +11,11 @@
 - 2026-11-19 — OpenAI Codex added controls to remove individual fixes and recalculate the plan.
 - 2026-11-19 — OpenAI Codex removed the numbered badge from the Your plan heading.
 - 2026-11-19 — OpenAI Codex added a red hover state and a short animation to plan removal buttons.
+- 2026-11-19 — OpenAI Codex displayed comfortable trail length as a percentage with the kilometre totals below it.
+- 2026-11-19 — OpenAI Codex clarified that the kilometre totals describe trail length.
+- 2026-11-19 — OpenAI Codex clarified the drinking-water KPI and displayed its configured distance cutoff in the tile.
+- 2026-11-19 — OpenAI Codex removed the cost per comfortable kilometre tile from the KPI strip.
+- 2026-11-19 — OpenAI Codex aligned the comfort and drinking-water tiles around coverage percentages, gains, and trail kilometre totals.
+- 2026-11-19 — OpenAI Codex added length-weighted average UTCI cooling and the affected trail kilometres to the KPI strip.
+- 2026-11-19 — OpenAI Codex made positive coverage gains more visible with a saturated green badge.
+- 2026-11-19 — Claude Code (Claude Opus 5.5) redesigned the KPI strip with an icon per tile, mini trail-coverage bars (today vs added by the plan), and consistent change indicators.

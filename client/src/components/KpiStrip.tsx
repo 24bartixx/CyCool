@@ -1,74 +1,208 @@
-import { Info } from 'lucide-react'
-import type { Kpis } from '../api/planner.ts'
-import { celsius, dec1, dec2, eur, km } from '../lib/format.ts'
+import { ArrowDown, Info, type LucideIcon } from 'lucide-react'
+import type { Kpis, MetricId } from '../api/planner.ts'
+import { celsius, DASH, dec1, dec2, km } from '../lib/format.ts'
+import { KPI_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 
-type Tile = { label: string; value: string; sub?: string; formula: string; emphasis?: boolean }
+/*
+ * Colour roles in the strip:
+ *  - chip tone = what the tile is about (cool/shade = teal, water = blue, CO₂ = neutral);
+ *  - green (gain) = what the plan added, in both the badges and the bars.
+ * Bar baselines use score-fine (not the brand teal) because brand teal next to gain green failed the
+ * normal-vision ΔE floor (13.5 < 15) in the dataviz validator; score-fine passes (16.5) and is the map's
+ * "fine" colour, which is what "comfortable" means. The 2px surface gap between parts is the backup cue.
+ */
+type Tone = 'cool' | 'water' | 'neutral'
+type BarTone = Exclude<Tone, 'neutral'>
 
-function tiles(k: Kpis, burdenPct: number | null, metricLabel: string): Tile[] {
-  const gain = k.comfortable_km_gain
-  const waterGain = k.after.water_reachable_km - k.before.water_reachable_km
+const CHIP: Record<Tone, string> = {
+  cool: 'bg-primary-soft text-primary',
+  water: 'bg-water-soft text-water',
+  neutral: 'bg-background text-muted',
+}
+const BAR: Record<BarTone, { track: string; base: string }> = {
+  cool: { track: 'bg-primary-soft', base: 'bg-score-fine' },
+  water: { track: 'bg-water-soft', base: 'bg-water' },
+}
+
+/** One trail-length share: the part that was already there today plus the part the plan added. */
+type Bar = { baseKm: number; gainKm: number; totalKm: number; label: string; tone: BarTone }
+
+type Tile = {
+  label: string
+  icon: LucideIcon
+  tone: Tone
+  value: string
+  /** The value is itself a reduction (burden, UTCI): shown with a green down arrow. */
+  reduction?: boolean
+  /** Change of a coverage share since today, in percentage points. */
+  gainPp?: number
+  bar?: Bar
+  sub?: string
+  formula: string
+  emphasis?: boolean
+}
+
+type Props = { kpis?: Kpis; burdenPct: number | null; metric: MetricId; fixCount: number; waterReachM?: number }
+
+const pct = (v: number) => `${dec1(v)}%`
+const share = (part: number, total: number) => (total > 0 ? (part / total) * 100 : 0)
+
+function coverage(afterKm: number, gainKm: number, totalKm: number, tone: BarTone, what: string) {
+  const gain = Math.max(0, gainKm)
+  const base = Math.max(0, afterKm - gain)
+  return {
+    value: totalKm > 0 ? pct(share(afterKm, totalKm)) : DASH,
+    gainPp: totalKm > 0 ? share(gain, totalKm) : undefined,
+    bar: {
+      baseKm: base,
+      gainKm: gain,
+      totalKm,
+      tone,
+      label: `${km(afterKm)} of ${km(totalKm)} ${what}: ${km(base)} today, ${km(gain)} added by the plan`,
+    },
+  }
+}
+
+function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?: number): Tile[] {
+  const { comfortable_km, trail_km, water_reachable_km } = k.after
+  const waterGain = water_reachable_km - k.before.water_reachable_km
+  const waterDistance = waterReachM == null ? 'the configured distance' : `${waterReachM} m`
+  const burdenCut = burdenPct != null && burdenPct >= 0.05
+  const cooled = k.utci_drop_trail_avg_c != null
   return [
     {
-      label: `${metricLabel} burden`,
-      value: burdenPct == null ? '—' : burdenPct < 0.05 ? '0 %' : `−${dec1(burdenPct)} %`,
-      sub: 'vs today, whole trail network',
-      formula: 'Reduction of Σ (score × length) over all trail points for the selected metric.',
+      label: `${METRIC_SHORT[metric]} burden reduced`,
+      icon: METRIC_ICON[metric],
+      tone: 'cool',
+      value: burdenPct == null ? DASH : burdenCut ? pct(burdenPct) : '0%',
+      reduction: burdenCut,
+      sub: "of today's total, whole trail network",
+      formula: 'How much the plan lowers Σ (score × length) over all trail points for the selected metric, compared with today.',
       emphasis: true,
     },
     {
-      label: 'Comfortable km',
-      value: km(k.after.comfortable_km),
-      sub: gain > 0 ? `+${dec2(gain)} km · was ${km(k.before.comfortable_km)}` : `of ${km(k.after.trail_km)} trails`,
-      formula: 'Length of trail pieces with UTCI below the comfort threshold (see Data & assumptions).',
+      label: 'Comfortable trail length',
+      icon: KPI_ICON.comfort,
+      tone: 'cool',
+      ...coverage(comfortable_km, k.comfortable_km_gain, trail_km, 'cool', 'comfortable'),
+      sub: `${dec2(comfortable_km)} / ${km(trail_km)} of trails`,
+      formula: 'Share of total trail length with UTCI below the comfort threshold (see Data & assumptions).',
     },
     {
-      label: 'Water within reach',
-      value: km(k.after.water_reachable_km),
-      sub: waterGain > 0 ? `+${dec2(waterGain)} km · was ${km(k.before.water_reachable_km)}` : `of ${km(k.after.trail_km)} trails`,
-      formula: 'Length of trail pieces with a fountain or oasis within the short-detour distance.',
+      label: 'Drinking water nearby',
+      icon: KPI_ICON.water,
+      tone: 'water',
+      ...coverage(water_reachable_km, waterGain, trail_km, 'water', 'with water nearby'),
+      sub: `${dec2(water_reachable_km)} / ${km(trail_km)} · within ${waterDistance}`,
+      formula: `A trail piece counts if any part is within ${waterDistance} of a drinking fountain or cyclist oasis in a straight line.`,
     },
     {
-      label: 'UTCI drop at fixed points',
-      value: k.utci_drop_avg_c == null ? '—' : celsius(k.utci_drop_avg_c),
-      sub: k.utci_drop_max_c == null ? 'no point cooled yet' : `max ${celsius(k.utci_drop_max_c)} · ${k.points_cooled} ${k.points_cooled === 1 ? 'point' : 'points'}`,
-      formula: 'Average and maximum UTCI reduction over all points whose UTCI went down.',
+      label: 'Average UTCI drop',
+      icon: KPI_ICON.cooling,
+      tone: 'cool',
+      value: celsius(k.utci_drop_trail_avg_c),
+      reduction: cooled,
+      bar: cooled
+        ? {
+            baseKm: 0,
+            gainKm: k.utci_cooled_trail_km,
+            totalKm: trail_km,
+            tone: 'cool',
+            label: `Cooled on ${km(k.utci_cooled_trail_km)} of ${km(trail_km)} of trails`,
+          }
+        : undefined,
+      sub: cooled ? `on ${dec2(k.utci_cooled_trail_km)} / ${km(trail_km)} of trails` : 'no trail cooled yet',
+      formula:
+        'Average drop in modeled felt temperature (UTCI) over the trail sections that cooled, weighted by section length. The bar shows how much of the network that is.',
     },
     {
       label: 'CO₂ avoided',
-      value: `${dec2(k.co2_t_per_year)} t/yr`,
+      icon: KPI_ICON.co2,
+      tone: 'neutral',
+      value: `${k.co2_t_per_year > 0 ? '+' : ''}${dec2(k.co2_t_per_year)} t/yr`,
       sub: 'trees & solar canopies',
       formula: 'Catalogue CO₂ sequestration/avoidance of the accepted fixes.',
-    },
-    {
-      label: '€ per comfortable km',
-      value: eur(k.eur_per_comfortable_km),
-      sub: `plan ${eur(k.capex_eur)} + ${eur(k.opex_eur_per_year)}/yr upkeep`,
-      formula: 'Plan CAPEX ÷ km that became comfortable. "—" until at least one km gains comfort.',
     },
   ]
 }
 
-export default function KpiStrip({ kpis, burdenPct, metricLabel }: { kpis?: Kpis; burdenPct: number | null; metricLabel: string }) {
+function GainBadge({ pp, hasPlan }: { pp: number; hasPlan: boolean }) {
+  if (!hasPlan) return null
+  if (pp < 0.05) return <span className="whitespace-nowrap text-xs font-medium text-muted">no change</span>
   return (
-    <section aria-label="Impact of the plan" className="shrink-0 border-t border-border bg-surface">
+    <span className="whitespace-nowrap rounded-full bg-gain-soft px-1.5 py-px text-xs font-bold text-gain" title="Change since today in percentage points">
+      +{dec1(pp)} <span aria-hidden="true">pp</span>
+      <span className="sr-only">percentage points since today</span>
+    </span>
+  )
+}
+
+function TrailBar({ bar }: { bar: Bar }) {
+  const base = Math.min(100, share(bar.baseKm, bar.totalKm))
+  const gain = Math.min(100, share(bar.gainKm, bar.totalKm))
+  const { track, base: baseFill } = BAR[bar.tone]
+  return (
+    <div role="img" aria-label={bar.label} title={bar.label} className={`col-span-2 mt-2 flex h-1 overflow-hidden rounded-full ${track}`}>
+      {base > 0 && <div className={`h-full rounded-full ${baseFill}`} style={{ width: `${base}%` }} />}
+      {gain > 0 && (
+        // A tiny gain still gets a visible sliver; the white left border is the 2px gap between parts.
+        <div
+          className={`h-full shrink-0 rounded-full bg-gain ${base > 0 ? 'border-l-2 border-surface' : ''}`}
+          style={{ width: `${gain}%`, minWidth: base > 0 ? 6 : 4 }}
+        />
+      )}
+    </div>
+  )
+}
+
+function TileView({ t, hasPlan }: { t: Tile; hasPlan: boolean }) {
+  const Icon = t.icon
+  return (
+    <li className={`grid min-w-[180px] flex-1 grid-cols-[auto_1fr] content-start gap-x-2.5 px-3 py-2.5 ${t.emphasis ? 'bg-primary-soft' : 'bg-surface'}`}>
+      <span
+        className={`row-span-2 grid size-8 place-items-center self-center rounded-lg ${t.emphasis ? 'bg-primary text-primary-foreground' : CHIP[t.tone]}`}
+        aria-hidden
+      >
+        <Icon className="size-4" />
+      </span>
+      <p className="flex min-w-0 items-center gap-1 text-[11px] font-medium text-muted">
+        <span className="truncate">{t.label}</span>
+        <span title={t.formula} className="shrink-0 cursor-help" aria-label={`How it is calculated: ${t.formula}`}>
+          <Info className="size-3" aria-hidden />
+        </span>
+      </p>
+      <p className="flex items-center gap-2 leading-tight">
+        <span className={`flex items-center gap-0.5 text-lg font-semibold ${t.emphasis ? 'text-primary' : 'text-foreground'}`}>
+          {t.reduction && <ArrowDown className="size-4 text-gain" strokeWidth={2.5} aria-hidden />}
+          {t.value}
+        </span>
+        {t.gainPp != null && <GainBadge pp={t.gainPp} hasPlan={hasPlan} />}
+      </p>
+      {/* Tiles without a bar keep its space so every sub-line sits on the same row. */}
+      {t.bar ? <TrailBar bar={t.bar} /> : <div className="col-span-2 mt-2 h-1" aria-hidden />}
+      {t.sub && (
+        <p className="col-span-2 mt-1 text-[11px] text-muted" title={t.sub}>
+          {t.sub}
+        </p>
+      )}
+    </li>
+  )
+}
+
+export default function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM }: Props) {
+  const hasPlan = fixCount > 0
+  return (
+    <section aria-label="Impact of your plan vs today" className="shrink-0 border-t border-border bg-surface">
       <ul className="flex gap-px overflow-x-auto bg-border">
         {kpis
-          ? tiles(kpis, burdenPct, metricLabel).map((t) => (
-              <li key={t.label} className={`min-w-[150px] flex-1 px-3 py-2.5 ${t.emphasis ? 'bg-primary-soft' : 'bg-surface'}`}>
-                <p className="flex items-center gap-1 text-[11px] font-medium text-muted">
-                  {t.label}
-                  <span title={t.formula} className="cursor-help" aria-label={`How it is calculated: ${t.formula}`}>
-                    <Info className="size-3" aria-hidden />
-                  </span>
-                </p>
-                <p className={`mt-0.5 text-lg font-semibold tabular-nums leading-tight ${t.emphasis ? 'text-primary' : ''}`}>{t.value}</p>
-                {t.sub && <p className="truncate text-[11px] text-muted" title={t.sub}>{t.sub}</p>}
-              </li>
-            ))
-          : Array.from({ length: 6 }, (_, i) => (
-              <li key={i} className="min-w-[150px] flex-1 bg-surface px-3 py-2.5">
-                <div className="cc-skeleton h-3 w-20" />
-                <div className="cc-skeleton mt-2 h-5 w-16" />
+          ? tiles(kpis, burdenPct, metric, waterReachM).map((t) => <TileView key={t.label} t={t} hasPlan={hasPlan} />)
+          : Array.from({ length: 5 }, (_, i) => (
+              <li key={i} className="flex min-w-[180px] flex-1 items-center gap-2.5 bg-surface px-3 py-2.5">
+                <div className="cc-skeleton size-8 rounded-lg" />
+                <div>
+                  <div className="cc-skeleton h-3 w-20" />
+                  <div className="cc-skeleton mt-2 h-5 w-16" />
+                </div>
               </li>
             ))}
       </ul>

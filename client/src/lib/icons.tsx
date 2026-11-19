@@ -1,9 +1,12 @@
 import {
+  Bike,
   Droplets,
   Flame,
   Gauge,
+  Leaf,
   PaintRoller,
   SunMedium,
+  ThermometerSnowflake,
   Timer,
   TreeDeciduous,
   Umbrella,
@@ -27,6 +30,14 @@ export const FIX_ICON: Record<string, LucideIcon> = {
   'INT-05': Timer,
   'INT-06': Zap,
 }
+
+/** KPI strip tiles (the headline burden tile uses METRIC_ICON of the selected metric). */
+export const KPI_ICON = {
+  comfort: Bike,
+  water: Droplets,
+  cooling: ThermometerSnowflake,
+  co2: Leaf,
+} satisfies Record<string, LucideIcon>
 
 export const METRIC_SHORT: Record<MetricId, string> = {
   water: 'Water',

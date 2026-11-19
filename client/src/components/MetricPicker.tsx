@@ -4,8 +4,6 @@ import { METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 type Props = { metrics: MetricInfo[]; value: MetricId; onChange: (m: MetricId) => void }
 
 export default function MetricPicker({ metrics, value, onChange }: Props) {
-  const current = metrics.find((m) => m.id === value)
-
   function onKeyDown(e: React.KeyboardEvent) {
     const i = metrics.findIndex((m) => m.id === value)
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') onChange(metrics[(i + 1) % metrics.length].id)
@@ -42,7 +40,6 @@ export default function MetricPicker({ metrics, value, onChange }: Props) {
           )
         })}
       </div>
-      {current && <p className="text-xs leading-relaxed text-muted">{current.description}</p>}
     </section>
   )
 }

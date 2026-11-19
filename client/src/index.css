@@ -42,9 +42,52 @@
 .cc-marker--station {
   border-radius: 5px;
 }
+/* Same colours as the segment highlights (SegmentHighlight): a ring around the marker keeps its score fill visible.
+   The white border stays as a separator between the score colour and the ring. */
 .cc-marker--selected {
-  outline: 3px solid var(--color-foreground);
-  outline-offset: 1px;
+  position: relative;
+  outline: 4px solid var(--color-selection);
+  outline-offset: 0;
+}
+/* A dashed ring orbiting the selected marker: the markers' counterpart of the dashes flowing along a selected line
+   (.cc-flow), and unlike the worst point's pulse (.cc-worst-ring), so the two never read as the same thing. */
+.cc-marker--selected::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border: 2px dashed var(--color-selection);
+  border-radius: 9999px;
+  animation: cc-orbit 6s linear infinite;
+  pointer-events: none;
+}
+@keyframes cc-orbit {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-marker--selected::after {
+    animation: none;
+  }
+}
+.cc-marker--hovered {
+  outline: 3px solid var(--color-selection-hover);
+  outline-offset: 0;
+}
+/* White dashes flowing along the selected segment (SegmentHighlight). The offset moves by one dash period
+   (dashArray "3 9" = 12 px), so the loop is seamless. */
+.cc-flow {
+  animation: cc-flow 0.9s linear infinite;
+}
+@keyframes cc-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-flow {
+    animation: none;
+  }
 }
 .cc-fix-badge {
   display: grid;

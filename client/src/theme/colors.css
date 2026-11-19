@@ -28,6 +28,8 @@
 
   /* Status (always paired with an icon or label) */
   --color-success: #0c7a3e;
+  --color-gain: #007a2f;
+  --color-gain-soft: #dcfce7;
   --color-warning: #a35a00;
   --color-warning-soft: #fdf0d9;
   --color-danger: #b42318;
@@ -46,8 +48,11 @@
   --color-water-soft: #dbe9fa;
   --color-network: #b9b6ac;
 
-  /* Map selection halo: a strong blue, far from the orange score ramp and dark enough for the grey-white basemap
-     (black read as a thicker line next to the dark scores, white vanished on the basemap). Deeper than
-     --color-water so a selected line doesn't read as a water feature. */
-  --color-selection: #1d4ed8;
+  /* Map selection (lines and marker rings): navy, outside every data colour. Not orange (score ramp), not teal
+     ("fine" and the brand). It shares a hue family with --color-water, but is far darker, so a selected line
+     doesn't read as a water feature. The outline frames the score colour (white gap between), so it never reads
+     as a thicker score line. Indigo and magenta were tried (magenta too loud); white vanishes on the basemap. */
+  --color-selection: #1e3a8a;
+  /* Hover: a lighter, greyer tint of the same navy, kept less saturated than --color-water so they don't meet. */
+  --color-selection-hover: #7c8fcf;
 }

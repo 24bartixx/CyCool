@@ -10,7 +10,6 @@ import PlanList from '../components/PlanList.tsx'
 import PointDrawer from '../components/PointDrawer.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
-import { METRIC_SHORT } from '../lib/icons.tsx'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
 
@@ -56,6 +55,7 @@ export default function PlannerPage() {
   const selected = pl.selectedId ? pl.pointsById.get(pl.selectedId) : undefined
   const worstId = ev?.worst[0]
   const solarUnit = String(data?.assumptions.find((a) => a.key === 'solar_unit')?.value ?? '')
+  const waterReachM = data?.assumptions.find((a) => a.key === 'water_ok_m')?.value
 
   // These are placed in one of two spots below, depending on the screen width.
   const fixes = data && selected && (
@@ -190,7 +190,13 @@ export default function PlannerPage() {
                 </aside>
               )}
             </div>
-            <KpiStrip kpis={ev?.kpis} burdenPct={ev?.burden.reduction_pct ?? null} metricLabel={METRIC_SHORT[ev?.metric ?? pl.metric]} />
+            <KpiStrip
+              kpis={ev?.kpis}
+              burdenPct={ev?.burden.reduction_pct ?? null}
+              metric={ev?.metric ?? pl.metric}
+              fixCount={ev?.plan.length ?? 0}
+              waterReachM={typeof waterReachM === 'number' ? waterReachM : undefined}
+            />
           </main>
         </div>
       )}

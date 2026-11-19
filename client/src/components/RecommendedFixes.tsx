@@ -145,7 +145,6 @@ export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy
   const MetricIcon = METRIC_ICON[metric]
   const options = rec.data?.point_id === point.id ? rec.data.options : undefined
   const useful = options?.filter((o) => o.status === 'available' || o.status === 'over_budget' || o.status === 'applied') ?? []
-  const noEffect = options?.filter((o) => o.status === 'no_effect') ?? []
   const bestId = options?.find((o) => o.status === 'available')?.fix_id
 
   return (
@@ -188,11 +187,6 @@ export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy
             <OptionCard key={o.fix_id} o={o} best={o.fix_id === bestId} metric={metric} busy={busy} onAccept={() => onAccept(o.fix_id)} />
           ))}
         </ul>
-      )}
-      {noEffect.length > 0 && (
-        <p className="mt-3 text-xs text-muted">
-          Not shown, no effect on {METRIC_SHORT[metric].toLowerCase()} here: {noEffect.map((o) => o.label).join(', ')}.
-        </p>
       )}
     </section>
   )
