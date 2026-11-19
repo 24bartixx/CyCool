@@ -640,11 +640,12 @@ export default function MapView({
         preferCanvas={false}
         attributionControl={false}
       >
-        {/* Leaflet's default prefix also carries a flag; keep only the Leaflet credit (open-source licences must be credited). */}
+        {/* Leaflet's default prefix also carries a flag; keep only the Leaflet credit (open-source licences must be credited).
+            One OSM credit covers both the basemap and the park outlines (ODbL terms are on the linked copyright page). */}
         <AttributionControl prefix='<a href="https://leafletjs.com">Leaflet</a>' />
         <TileLayer
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           className="cc-basemap"
           maxZoom={19}
         />
@@ -685,7 +686,6 @@ export default function MapView({
           {showParks && (
             <GeoJSON
               data={mapData.parks}
-              attribution='Parks &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL)'
               style={{
                 color: park,
                 weight: 1,
@@ -713,7 +713,11 @@ export default function MapView({
                 center={f.wgs}
                 radius={waterReach}
                 interactive={false}
-                pathOptions={{ stroke: false, fillColor: water, fillOpacity: 1 }}
+                pathOptions={{
+                  stroke: false,
+                  fillColor: water,
+                  fillOpacity: 1,
+                }}
               />
             ))}
           {showPlan &&
@@ -723,7 +727,11 @@ export default function MapView({
                 center={o.wgs}
                 radius={waterReach}
                 interactive={false}
-                pathOptions={{ stroke: false, fillColor: water, fillOpacity: 1 }}
+                pathOptions={{
+                  stroke: false,
+                  fillColor: water,
+                  fillOpacity: 1,
+                }}
               />
             ))}
         </Pane>
@@ -815,7 +823,9 @@ export default function MapView({
                   direction="top"
                   offset={[0, -8]}
                 >
-                  <strong>Bicibox bike parking{b.name ? ` · ${b.name}` : ""}</strong>
+                  <strong>
+                    Bicibox bike parking{b.name ? ` · ${b.name}` : ""}
+                  </strong>
                   {b.address && (
                     <>
                       <br />
@@ -971,12 +981,12 @@ export default function MapView({
             set: setShowFountains,
           },
           {
-            label: "Parks (OpenStreetMap)",
+            label: "Parks",
             checked: showParks,
             set: setShowParks,
           },
           {
-            label: "Bike parking (Bicibox)",
+            label: "Bicibox bike parkings ",
             checked: showBikeParking,
             set: setShowBikeParking,
           },

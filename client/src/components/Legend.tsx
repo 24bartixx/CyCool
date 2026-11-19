@@ -11,7 +11,10 @@ type Props = {
 
 export default function Legend({ metric, filtered = false }: Props) {
   return (
-    <div data-map-overlay className="absolute bottom-6 left-3 z-[1000] hidden w-52 md:block rounded-xl border border-border bg-surface/95 p-3 text-[11px] shadow-sm backdrop-blur">
+    <div
+      data-map-overlay
+      className="absolute bottom-6 left-3 z-[1000] hidden w-52 md:block rounded-xl border border-border bg-surface/95 p-3 text-[11px] shadow-sm backdrop-blur"
+    >
       <p className="mb-1.5 font-semibold text-foreground">
         {METRIC_SHORT[metric]} score
       </p>
@@ -43,7 +46,7 @@ export default function Legend({ metric, filtered = false }: Props) {
             className="h-2.5 w-3 rounded-[2px] border border-park bg-park/25"
             aria-hidden
           />{" "}
-          Park (OpenStreetMap)
+          Park
         </li>
         <li className="flex items-center gap-2">
           <span
@@ -52,7 +55,7 @@ export default function Legend({ metric, filtered = false }: Props) {
           >
             P
           </span>{" "}
-          Bike parking (Bicibox)
+          Bicibox bike parking
         </li>
         <li className="flex items-center gap-2">
           <span
@@ -77,8 +80,8 @@ export default function Legend({ metric, filtered = false }: Props) {
         </li>
         {filtered && (
           <li className="flex items-center gap-2">
-            <span className="h-1 w-3 rounded-full bg-network" aria-hidden />{" "}
-            Not in “Where to look”
+            <span className="h-1 w-3 rounded-full bg-network" aria-hidden /> Not
+            in “Where to look”
           </li>
         )}
       </ul>
