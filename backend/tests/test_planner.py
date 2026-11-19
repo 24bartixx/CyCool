@@ -46,6 +46,16 @@ def test_context_layers():
     assert len(body["parks"]["features"]) == len(parks) and len(body["bike_parkings"]) == 10
 
 
+def test_surface_temperature_layer():
+    """Landsat LST covers trails and the rest of the network, in a plausible summer range, and is display only."""
+    feats = ds.surface_temp["features"]
+    on_trail = [f for f in feats if f["properties"]["on_trail"]]
+    assert on_trail and len(on_trail) < len(feats)
+    assert all(25 <= f["properties"]["lst_c"] <= 65 for f in feats)
+    body = client.get("/api/map-data").json()
+    assert len(body["surface_temp"]["features"]) == len(feats)
+
+
 def test_all_real_ambici_stations_are_points():
     stations = [p for p in ds.points if p.kind == "station"]
     assert len(stations) == 17

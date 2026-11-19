@@ -15,8 +15,11 @@ React + Tailwind client, FastAPI backend, PostgreSQL + PostGIS, all run with Doc
 | `CoolCycle_Viladecans.gpkg`         | Municipal layers and the synthetic VAS-R1 tables |
 | `bike_solar_screen_geojson.geojson` | Solar statistics for each cycle segment          |
 | `osm_parks.geojson`                 | Park outlines from OpenStreetMap (see below)     |
+| `landsat_lst_segments.json`         | Landsat summer surface temperature per segment   |
 
 `osm_parks.geojson` holds the `leisure=park` polygons inside the Viladecans boundary, taken from the Overpass API. To refresh it, run `python scripts/fetch_osm_parks.py`. You don't need this for a normal setup. Park data © OpenStreetMap contributors, licensed under the [ODbL](https://www.openstreetmap.org/copyright).
+
+`landsat_lst_segments.json` holds the summer land surface temperature of every network segment: the per-pixel median of clear July–August 2023–2025 Landsat 8/9 Collection 2 Level-2 scenes (ST_B10, ~10:30 overpass), sampled every 10 m along each segment. To refresh it, run `python scripts/fetch_landsat_lst.py` (reads from Microsoft Planetary Computer, no account needed). It is ground surface temperature, not UTCI, and is not used in scores or KPIs (the API returns it as `surface_temp`; it is not drawn on the map). Landsat data courtesy of the U.S. Geological Survey (public domain).
 
 ### 2. Create `.env` and pick a free database port
 
@@ -79,7 +82,7 @@ python -m pip install -r scripts/requirements.txt
 python scripts/export_to_db.py
 ```
 
-A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities, 41 OSM parks and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
+A successful run ends with `Done` and loads 1037 segments, 129 fountains, 17 AMBici stations, 188 facilities, 41 OSM parks, Landsat surface temperature for all 1037 segments and the synthetic tables, with the 13 mapped synthetic routes linked (TRM-13 has no real street match; see `scripts/trail_mapping.yaml`). Restart the backend afterwards (`docker compose restart backend`): it loads the planner dataset from the database once at startup.
 
 | Command                                         | What it does                                                 |
 | ----------------------------------------------- | ------------------------------------------------------------ |
@@ -159,6 +162,7 @@ backend/alembic/
 scripts/
   export_to_db.py            seeds the database and computes per-segment metrics
   fetch_osm_parks.py         one-off: OpenStreetMap park outlines -> data/osm_parks.geojson
+  fetch_landsat_lst.py       one-off: Landsat summer surface temperature per segment -> data/landsat_lst_segments.json
   data/                      input data (GeoPackage, GeoJSON)
 client/src/
   theme/colors.css           app colors, the only place to change them

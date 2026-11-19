@@ -3,3 +3,7 @@ shapely>=2.0
 pyproj>=3.6
 pyshp>=2.3
 pyyaml>=6.0
+rasterio>=1.4
+pystac-client>=0.8
+planetary-computer>=1.0
+numpy>=1.26

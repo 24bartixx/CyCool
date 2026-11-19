@@ -15,6 +15,8 @@ mostly in SQL:
   - fountains: real municipal fountains, cemetery excluded
   - context network: the rest of the real network, drawn grey
   - parks (OpenStreetMap outlines) and Bicibox bike parkings (municipal facilities): display-only map layers
+  - surface temperature: Landsat 8/9 summer land surface temperature on every built segment (trails and the
+    rest of the network); a display-only layer, it never enters scores or KPIs
   - sun anchors: percentiles of the solar index over the whole built network, so a sun score does not
     depend on which trails are in scope
   - local UTCI: the synthetic trail UTCI shifted by the real sun exposure of each piece
@@ -116,6 +118,7 @@ class Dataset:
     context_network: dict[str, Any]
     parks: dict[str, Any]  # GeoJSON FeatureCollection of OSM park outlines (WGS84), display only
     bike_parkings: list[dict[str, Any]]  # Bicibox secure bike parkings, display only
+    surface_temp: dict[str, Any]  # GeoJSON of built segments with Landsat summer LST (°C), display only
     solar_min: float  # sun score 0 (low percentile of the whole built network)
     solar_max: float  # sun score 1 (high percentile of the whole built network)
     sun_heat_gap_c: float  # UTCI full sun minus full shade at the reference hour (hourly profile)
@@ -331,6 +334,16 @@ _CONTEXT_SQL = f"""
     FROM cycle_segment s
     WHERE s.cycle_class <> ALL(:excluded_classes)
       AND NOT EXISTS (SELECT 1 FROM trail_link l WHERE l.segment_id = s.id)
+    ORDER BY s.id
+"""
+
+_SURFACE_TEMP_SQL = f"""
+    WITH {_TRAIL_LINK}
+    SELECT s.id, s.street_name, m.lst_summer_c AS lst_c,
+           EXISTS (SELECT 1 FROM trail_link l WHERE l.segment_id = s.id) AS on_trail,
+           ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(s.geom, 1.0), 4326), 6) AS geometry
+    FROM cycle_segment s JOIN segment_metrics m ON m.segment_id = s.id
+    WHERE s.cycle_class <> ALL(:excluded_classes) AND m.lst_summer_c IS NOT NULL
     ORDER BY s.id
 """
 
@@ -592,6 +605,22 @@ def _load_context(conn: Connection) -> dict[str, Any]:
     }
 
 
+def _load_surface_temp(conn: Connection) -> dict[str, Any]:
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {
+                    "id": r["id"], "street": r["street_name"], "lst_c": _num(r["lst_c"]), "on_trail": bool(r["on_trail"]),
+                },
+                "geometry": json.loads(r["geometry"]),
+            }
+            for r in _rows(conn, _SURFACE_TEMP_SQL)
+        ],
+    }
+
+
 def _load_catalogue(conn: Connection) -> dict[str, dict[str, Any]]:
     numeric = ("capex_eur", "opex_eur_yr", "surface_temp_reduction_c", "utci_reduction_c", "co2_kg_yr", "deployment_weeks")
     catalogue = {}
@@ -671,6 +700,7 @@ def load_dataset() -> Dataset:
         context = _load_context(conn)
         parks = _load_parks(conn)
         bike_parkings = _load_bike_parkings(conn)
+        surface_temp = _load_surface_temp(conn)
         catalogue = _load_catalogue(conn)
         solar = _rows(
             conn, _SOLAR_ANCHORS_SQL,
@@ -707,6 +737,7 @@ def load_dataset() -> Dataset:
         context_network=context,
         parks=parks,
         bike_parkings=bike_parkings,
+        surface_temp=surface_temp,
         solar_min=solar_min,
         solar_max=solar_max,
         sun_heat_gap_c=gap_c,
