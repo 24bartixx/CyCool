@@ -8,6 +8,7 @@ from app.models.data_source import DataSource
 from app.models.drinking_fountain import DrinkingFountain
 from app.models.hourly_profile import HourlyProfile
 from app.models.intervention_type import InterventionType
+from app.models.osm_park import OsmPark
 from app.models.plan import Plan
 from app.models.plan_item import PlanItem
 from app.models.segment_metrics import SegmentMetrics
@@ -25,6 +26,7 @@ __all__ = [
     "DrinkingFountain",
     "HourlyProfile",
     "InterventionType",
+    "OsmPark",
     "Plan",
     "PlanItem",
     "SegmentMetrics",

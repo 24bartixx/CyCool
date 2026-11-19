@@ -14,6 +14,7 @@ mostly in SQL:
     stations (EST-B01/B02) are matched to real ones (assumptions.yaml) and add their synthetic data
   - fountains: real municipal fountains, cemetery excluded
   - context network: the rest of the real network, drawn grey
+  - parks (OpenStreetMap outlines) and Bicibox bike parkings (municipal facilities): display-only map layers
   - sun anchors: percentiles of the solar index over the whole built network, so a sun score does not
     depend on which trails are in scope
   - local UTCI: the synthetic trail UTCI shifted by the real sun exposure of each piece
@@ -43,6 +44,7 @@ SPLIT_ABOVE_M = 100.0  # segments longer than this are split...
 PIECE_TARGET_M = 50.0  # ...into ceil(len / 50) equal pieces
 EXCLUDED_CLASSES = ("Carril Bici_En Projecte DIBA",)  # planned, not built
 EXCLUDED_FOUNTAIN_LOCATIONS = ("Cementiri",)  # not on cyclists' routes
+BIKE_PARKING = ("Transport", "Estacions Bicibox")  # municipal facility (category, subcategory)
 JUNCTION_CATEGORY = "Critical Traffic Light Junction"
 CATALOGUE_IDS = ("INT-01", "INT-02", "INT-03", "INT-04", "INT-05", "INT-06")
 MODAL_SHIFT_ID = "INT-08"  # not a fix: CO2 and € per replaced trip, used by the KPIs
@@ -112,6 +114,8 @@ class Dataset:
     assumptions: dict[str, Any]
     assumption_list: list[dict[str, Any]]
     context_network: dict[str, Any]
+    parks: dict[str, Any]  # GeoJSON FeatureCollection of OSM park outlines (WGS84), display only
+    bike_parkings: list[dict[str, Any]]  # Bicibox secure bike parkings, display only
     solar_min: float  # sun score 0 (low percentile of the whole built network)
     solar_max: float  # sun score 1 (high percentile of the whole built network)
     sun_heat_gap_c: float  # UTCI full sun minus full shade at the reference hour (hourly profile)
@@ -126,6 +130,8 @@ _PARAMS = {
     "excluded_fountains": list(EXCLUDED_FOUNTAIN_LOCATIONS),
     "junction_category": JUNCTION_CATEGORY,
     "catalogue_ids": [*CATALOGUE_IDS, MODAL_SHIFT_ID],
+    "bike_parking_category": BIKE_PARKING[0],
+    "bike_parking_subcategory": BIKE_PARKING[1],
 }
 
 # Real segments that make up a trail: the built cycle-lane segments on its matched streets. A street match
@@ -301,6 +307,20 @@ _FOUNTAINS_SQL = """
            ST_AsGeoJSON(geom, 2) AS utm, ST_AsGeoJSON(ST_Transform(geom, 4326), 6) AS wgs
     FROM drinking_fountain
     WHERE coalesce(trim(location_name), '') <> ALL(:excluded_fountains)
+    ORDER BY id
+"""
+
+_PARKS_SQL = """
+    SELECT id, name, round(ST_Area(geom)) AS area_m2,
+           ST_AsGeoJSON(ST_Transform(ST_SimplifyPreserveTopology(geom, 1.0), 4326), 6) AS geometry
+    FROM osm_park
+    ORDER BY id
+"""
+
+_BIKE_PARKING_SQL = """
+    SELECT id, name, address, ST_AsGeoJSON(ST_Transform(geom, 4326), 6) AS wgs
+    FROM city_facility
+    WHERE category = :bike_parking_category AND subcategory = :bike_parking_subcategory
     ORDER BY id
 """
 
@@ -541,6 +561,27 @@ def _load_fountains(conn: Connection) -> list[dict[str, Any]]:
     ]
 
 
+def _load_parks(conn: Connection) -> dict[str, Any]:
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"id": r["id"], "name": r["name"], "area_m2": _num(r["area_m2"])},
+                "geometry": json.loads(r["geometry"]),
+            }
+            for r in _rows(conn, _PARKS_SQL)
+        ],
+    }
+
+
+def _load_bike_parkings(conn: Connection) -> list[dict[str, Any]]:
+    return [
+        {"id": f"BP-{r['id']}", "name": r["name"], "address": r["address"], "wgs": _latlon(r["wgs"])[0]}
+        for r in _rows(conn, _BIKE_PARKING_SQL)
+    ]
+
+
 def _load_context(conn: Connection) -> dict[str, Any]:
     return {
         "type": "FeatureCollection",
@@ -628,6 +669,8 @@ def load_dataset() -> Dataset:
         trails_raw = _load_trails(conn, points_raw)
         fountains = _load_fountains(conn)
         context = _load_context(conn)
+        parks = _load_parks(conn)
+        bike_parkings = _load_bike_parkings(conn)
         catalogue = _load_catalogue(conn)
         solar = _rows(
             conn, _SOLAR_ANCHORS_SQL,
@@ -662,6 +705,8 @@ def load_dataset() -> Dataset:
         assumptions=assumptions,
         assumption_list=assumption_list,
         context_network=context,
+        parks=parks,
+        bike_parkings=bike_parkings,
         solar_min=solar_min,
         solar_max=solar_max,
         sun_heat_gap_c=gap_c,

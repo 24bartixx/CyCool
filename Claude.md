@@ -43,6 +43,8 @@ The planner enters a **budget** and picks a **metric**. The map shows the **wors
    - all 17 real AMBici stations at their real location, also the ones off the trails. Each takes the UTCI of the nearest trail and the solar index of the nearest street segment. The 2 VAS-R1 stations (EST-B01/B02) are matched to real stations (`vas_station_match` in `assumptions.yaml`) and add their synthetic temperature anomaly and shade
 3. **Data sources:**
    - **Real (municipal):** segment geometry, length, solar index, fountain locations, AMBici stations, facilities (`scripts/data/`, EPSG:25831, seeded into PostGIS). Cemetery fountains are excluded.
+   - **External (OpenStreetMap, ODbL):** park outlines (`leisure=park`), fetched once by `scripts/fetch_osm_parks.py` into `scripts/data/osm_parks.geojson` and seeded into `osm_park`.
+   - **Display-only map layers** (they never change scores or KPIs): parks (OSM) and the 10 Bicibox bike parkings (municipal facilities `Transport / Estacions Bicibox`).
    - **Synthetic (VAS-R1):** temperature/UTCI, rider counts, hourly profile, junctions, shelters, catalogue costs and effects.
 4. **The VAS-R1 dataset is synthetic.** Never present it as real Viladecans data, and show a "synthetic/demo data" label in the UI.
 5. **Every assumption lives in `backend/app/config/assumptions.yaml`** with a short justification, so the KPIs recalculate when an assumption changes. Current assumptions:

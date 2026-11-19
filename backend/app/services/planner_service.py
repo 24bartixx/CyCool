@@ -79,6 +79,8 @@ def static_map_data(ds: Dataset) -> dict:
         "points": [{k: v for k, v in p.raw.items() if k not in ("utm", "mid_utm")} for p in ds.points],
         "fountains": [{"id": f["id"], "location": f["location"], "wgs": f["wgs"]} for f in ds.fountains],
         "context_network": ds.context_network,
+        "parks": ds.parks,
+        "bike_parkings": ds.bike_parkings,
         "catalogue": [
             {
                 **ds.catalogue[fid],

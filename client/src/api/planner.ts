@@ -90,6 +90,13 @@ export type MapData = {
   points: MapPointInfo[]
   fountains: { id: string; location: string | null; wgs: LatLng }[]
   context_network: GeoJSON.FeatureCollection
+  /** OpenStreetMap park outlines (display only). */
+  parks: GeoJSON.FeatureCollection<
+    GeoJSON.Polygon | GeoJSON.MultiPolygon,
+    { id: string; name: string | null; area_m2: number }
+  >
+  /** Municipal Bicibox secure bike parkings (display only). */
+  bike_parkings: { id: string; name: string | null; address: string | null; wgs: LatLng }[]
   catalogue: CatalogueItem[]
   assumptions: Assumption[]
   solar_range: [number, number]

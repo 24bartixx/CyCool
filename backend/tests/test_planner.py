@@ -2,6 +2,7 @@ import math
 
 import pytest
 from fastapi.testclient import TestClient
+from shapely.geometry import shape
 
 from app.main import app
 from app.services.dataset import get_dataset
@@ -24,6 +25,25 @@ def test_dataset_shape():
     assert {p.kind for p in ds.points} == {"segment", "junction", "station"}
     assert all(p.length_m <= 100 for p in ds.points if p.kind == "segment")
     assert all(any(p.trail_id == t for p in ds.points) for t in ds.trails)
+
+
+def test_context_layers():
+    """Parks (OSM outlines) and Bicibox parkings are display-only layers inside the planner's area."""
+    lats = [ll[0] for p in ds.points for ll in p.raw["wgs"]]
+    lons = [ll[1] for p in ds.points for ll in p.raw["wgs"]]
+    pad = 0.02  # about 2 km around the trails and stations
+
+    def inside(lat: float, lon: float) -> bool:
+        return min(lats) - pad <= lat <= max(lats) + pad and min(lons) - pad <= lon <= max(lons) + pad
+
+    assert len(ds.bike_parkings) == 10
+    assert all(b["name"] and inside(*b["wgs"]) for b in ds.bike_parkings)
+    parks = ds.parks["features"]
+    assert parks and all(f["geometry"]["type"] in ("Polygon", "MultiPolygon") for f in parks)
+    assert all(f["properties"]["area_m2"] > 0 for f in parks)
+    assert all(inside(c.y, c.x) for c in (shape(f["geometry"]).representative_point() for f in parks))
+    body = client.get("/api/map-data").json()
+    assert len(body["parks"]["features"]) == len(parks) and len(body["bike_parkings"]) == 10
 
 
 def test_all_real_ambici_stations_are_points():

@@ -109,6 +109,31 @@ const fountainIcon = L.divIcon({
   iconAnchor: [FOUNTAIN_PX / 2, FOUNTAIN_PX / 2],
 });
 
+/** A Bicibox secure bike parking: context like a fountain, a small charcoal "P" square (AMBici stations are larger and
+    score-coloured). */
+const BIKE_PARKING_PX = 15;
+const bikeParkingIcon = L.divIcon({
+  html: `<div class="cc-marker cc-marker--bike-parking" style="width:${BIKE_PARKING_PX}px;height:${BIKE_PARKING_PX}px">P</div>`,
+  className: "cc-fountain-icon",
+  iconSize: [BIKE_PARKING_PX, BIKE_PARKING_PX],
+  iconAnchor: [BIKE_PARKING_PX / 2, BIKE_PARKING_PX / 2],
+});
+
+type ParkProps = MapData["parks"]["features"][number]["properties"];
+
+/** Park tooltip as a DOM node, so an OSM name is shown as text, never parsed as HTML. */
+function parkTooltip(props: ParkProps): HTMLElement {
+  const el = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `Park · ${props.name ?? "unnamed"}`;
+  el.append(
+    title,
+    document.createElement("br"),
+    `${Math.round(props.area_m2).toLocaleString("en")} m² · OpenStreetMap`,
+  );
+  return el;
+}
+
 function fixBadge(fixId: string, slot: number): L.DivIcon {
   const Glyph = FIX_ICON[fixId];
   return L.divIcon({
@@ -538,6 +563,8 @@ export default function MapView({
   const [showPlan, setShowPlan] = useState(true);
   const [showContext, setShowContext] = useState(false);
   const [showFountains, setShowFountains] = useState(false);
+  const [showParks, setShowParks] = useState(false);
+  const [showBikeParking, setShowBikeParking] = useState(false);
 
   const results = useMemo(
     () => new Map(evaluation?.points.map((p) => [p.id, p])),
@@ -576,6 +603,7 @@ export default function MapView({
 
   const neutral = cssVar("--color-network");
   const water = cssVar("--color-water");
+  const park = cssVar("--color-park");
   const selection = cssVar("--color-selection");
   const selectionHover = cssVar("--color-selection-hover");
   const selectedResult = selected ? results.get(selected.id) : undefined;
@@ -648,6 +676,29 @@ export default function MapView({
                 opacity: 0.9,
                 dashArray: f?.properties?.cycle ? undefined : "3 4",
               })}
+            />
+          )}
+        </Pane>
+
+        {/* Parks under the reach tint and the trails, so they never take a click meant for a trail piece. */}
+        <Pane name="parks" style={{ zIndex: 385 }}>
+          {showParks && (
+            <GeoJSON
+              data={mapData.parks}
+              attribution='Parks &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL)'
+              style={{
+                color: park,
+                weight: 1,
+                opacity: 0.7,
+                fillColor: park,
+                fillOpacity: 0.22,
+              }}
+              onEachFeature={(f, layer) =>
+                layer.bindTooltip(parkTooltip(f.properties as ParkProps), {
+                  className: "cc-tooltip",
+                  sticky: true,
+                })
+              }
             />
           )}
         </Pane>
@@ -748,6 +799,29 @@ export default function MapView({
                   offset={[0, -10]}
                 >
                   Drinking fountain{f.location ? ` · ${f.location}` : ""}
+                </Tooltip>
+              </Marker>
+            ))}
+          {showBikeParking &&
+            mapData.bike_parkings.map((b) => (
+              <Marker
+                key={b.id}
+                position={b.wgs}
+                icon={bikeParkingIcon}
+                keyboard={false}
+              >
+                <Tooltip
+                  className="cc-tooltip"
+                  direction="top"
+                  offset={[0, -8]}
+                >
+                  <strong>Bicibox bike parking{b.name ? ` · ${b.name}` : ""}</strong>
+                  {b.address && (
+                    <>
+                      <br />
+                      {b.address}
+                    </>
+                  )}
                 </Tooltip>
               </Marker>
             ))}
@@ -895,6 +969,16 @@ export default function MapView({
             label: "Drinking fountains",
             checked: showFountains,
             set: setShowFountains,
+          },
+          {
+            label: "Parks (OpenStreetMap)",
+            checked: showParks,
+            set: setShowParks,
+          },
+          {
+            label: "Bike parking (Bicibox)",
+            checked: showBikeParking,
+            set: setShowBikeParking,
           },
           {
             label: "Rest of the network",
