@@ -15,7 +15,10 @@ type Props = {
   onChange: (kinds: Set<PointKind>) => void
 }
 
-/** Multi-select: each button toggles one kind in or out of the worst-points list. */
+/**
+ * Multi-select: each row toggles one kind in or out of the worst-points list. Drawn as a checklist, not as tiles,
+ * so it doesn't read as another single-choice control like "What to improve" above it.
+ */
 export default function PointTypeFilter({ value, counts, onChange }: Props) {
   const allOn = POINT_KINDS.every((k) => value.has(k))
 
@@ -43,35 +46,38 @@ export default function PointTypeFilter({ value, counts, onChange }: Props) {
           </button>
         )}
       </div>
-      <div role="group" aria-labelledby="kinds-h" className="grid grid-cols-3 gap-1 rounded-xl bg-background p-1">
+      <fieldset aria-labelledby="kinds-h" className="divide-y divide-border overflow-hidden rounded-xl border border-border">
         {POINT_KINDS.map((kind) => {
           const { label, Icon } = KIND_FILTER[kind]
           const on = value.has(kind)
           return (
-            <button
+            <label
               key={kind}
-              type="button"
-              aria-pressed={on}
-              onClick={() => toggle(kind)}
-              className={`relative flex flex-col items-center gap-0.5 rounded-lg px-1 py-2 text-[11px] font-medium leading-tight transition-colors ${
-                on ? 'bg-surface text-primary shadow-sm ring-1 ring-border' : 'text-muted hover:text-foreground'
-              }`}
+              className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-surface-2 has-[:focus-visible]:bg-surface-2"
             >
+              <input type="checkbox" checked={on} onChange={() => toggle(kind)} className="peer sr-only" />
               <span
                 aria-hidden
-                className={`absolute right-1 top-1 grid size-3.5 place-items-center rounded-[4px] border ${
-                  on ? 'border-primary bg-primary text-primary-foreground' : 'border-border-strong'
+                className={`grid size-4 shrink-0 place-items-center rounded-[5px] border transition-colors peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary ${
+                  on ? 'border-primary bg-primary text-primary-foreground' : 'border-border-strong bg-surface'
                 }`}
               >
-                {on && <Check className="size-2.5" strokeWidth={3} />}
+                {on && <Check className="size-3" strokeWidth={3} />}
               </span>
-              <Icon className="mb-0.5 size-4" aria-hidden />
-              <span className="text-center">{label}</span>
-              <span className={`tabular-nums ${on ? 'text-muted' : ''}`}>{counts[kind]}</span>
-            </button>
+              <Icon className={`size-4 shrink-0 ${on ? 'text-primary' : 'text-muted'}`} aria-hidden />
+              <span className={`flex-1 truncate font-medium ${on ? 'text-foreground' : 'text-muted'}`}>{label}</span>
+              <span
+                className={`rounded-full px-2 py-px text-[11px] font-medium tabular-nums ${
+                  on ? 'bg-primary-soft text-primary' : 'bg-background text-muted'
+                }`}
+              >
+                {counts[kind]}
+                <span className="sr-only"> to fix</span>
+              </span>
+            </label>
           )
         })}
-      </div>
+      </fieldset>
     </section>
   )
 }

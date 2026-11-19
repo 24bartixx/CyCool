@@ -31,6 +31,7 @@ import type {
   MapData,
   MapPointInfo,
   MetricId,
+  PointKind,
   PointResult,
 } from "../api/planner.ts";
 import { dec2, metres } from "../lib/format.ts";
@@ -43,6 +44,13 @@ type Props = {
   mapData: MapData;
   evaluation?: Evaluation;
   metric: MetricId;
+  /**
+   * Point kinds picked in "Where to look". The others are drawn grey (not hidden: the trail lines locate the
+   * markers on them, and points in the plan must stay reachable) and stay clickable.
+   */
+  kinds: ReadonlySet<PointKind>;
+  /** The worst point among those kinds (see rankWorst); ringed, and the target of "Go to worst point". */
+  worstId?: string;
   selectedId?: string;
   hoveredId?: string;
   onSelect: (id: string) => void;
@@ -57,24 +65,29 @@ type Props = {
 };
 
 const iconCache = new Map<string, L.DivIcon>();
+/** A kind left out of "Where to look": a smaller grey marker, so the eye goes to the kinds in play. */
+const MUTED_MARKER_PX = 18;
+
 function nodeIcon(
   kind: "junction" | "station",
   color: string,
   highlight: "selected" | "hovered" | undefined,
+  muted = false,
 ): L.DivIcon {
-  const key = `${kind}|${color}|${highlight}`;
+  const key = `${kind}|${color}|${highlight}|${muted}`;
   const hit = iconCache.get(key);
   if (hit) return hit;
   const Glyph = kind === "junction" ? TrafficCone : Bike;
-  const html = `<div class="cc-marker cc-marker--${kind}${highlight ? ` cc-marker--${highlight}` : ""}" style="width:24px;height:24px;background:${color}">${renderToStaticMarkup(
-    <Glyph size={13} strokeWidth={2.5} aria-hidden />,
+  const px = muted ? MUTED_MARKER_PX : 24;
+  const html = `<div class="cc-marker cc-marker--${kind}${highlight ? ` cc-marker--${highlight}` : ""}${muted ? " cc-marker--muted" : ""}" style="width:${px}px;height:${px}px;background:${color}">${renderToStaticMarkup(
+    <Glyph size={muted ? 10 : 13} strokeWidth={2.5} aria-hidden />,
   )}</div>`;
-  // stations are drawn up-right of their position so they never hide a junction on the same spot
+  // stations are drawn up-right of their position (4 px off it) so they never hide a junction on the same spot
   const icon = L.divIcon({
     html,
     className: "",
-    iconSize: [24, 24],
-    iconAnchor: kind === "station" ? [-4, 28] : [12, 12],
+    iconSize: [px, px],
+    iconAnchor: kind === "station" ? [-4, px + 4] : [px / 2, px / 2],
   });
   iconCache.set(key, icon);
   return icon;
@@ -114,6 +127,8 @@ function syncSize(map: L.Map, lastLeft: RefObject<number | undefined>) {
 
 /** Width of the lanes' score lines, at every zoom. */
 const LANE_PX = 7;
+/** Width of a lane left out of "Where to look": grey, thinner than a score line, thicker than the rest of the network. */
+const MUTED_LANE_PX = 4;
 /** Width of the solid selection-coloured line drawn over the selected segment, at street level (see SegmentHighlight). */
 const SELECTED_LINE_PX = 19;
 const HOVERED_LINE_PX = 13;
@@ -492,6 +507,8 @@ export default function MapView({
   mapData,
   evaluation,
   metric,
+  kinds,
+  worstId,
   selectedId,
   hoveredId,
   onSelect,
@@ -503,9 +520,8 @@ export default function MapView({
   const popupRef = useRef<L.Popup>(null);
   const [map, setMap] = useState<L.Map | null>(null);
   const [showPlan, setShowPlan] = useState(true);
-  const [showContext, setShowContext] = useState(true);
-  const [showFountains, setShowFountains] = useState(true);
-  const [showReach, setShowReach] = useState(false);
+  const [showContext, setShowContext] = useState(false);
+  const [showFountains, setShowFountains] = useState(false);
 
   const results = useMemo(
     () => new Map(evaluation?.points.map((p) => [p.id, p])),
@@ -524,8 +540,9 @@ export default function MapView({
     () => new Map(mapData.points.map((p) => [p.id, p])),
     [mapData.points],
   );
-  const worstId = evaluation?.worst[0];
   const worstPoint = worstId ? pointsById.get(worstId) : undefined;
+  // The selected point keeps its colours even when its kind is filtered out (it can be picked from the plan).
+  const muted = (p: MapPointInfo) => !kinds.has(p.kind) && p.id !== selectedId;
   const selected = selectedId ? pointsById.get(selectedId) : undefined;
   const hovered = hoveredId ? pointsById.get(hoveredId) : undefined;
   const waterOk = Number(
@@ -550,13 +567,14 @@ export default function MapView({
 
   const scoreLine = (p: MapPointInfo) => {
     const r = results.get(p.id);
+    const off = muted(p);
     return (
       <Polyline
         key={p.id}
         positions={p.wgs}
         pathOptions={{
-          color: r ? scoreColor(r.scores[metric]) : neutral,
-          weight: LANE_PX,
+          color: r && !off ? scoreColor(r.scores[metric]) : neutral,
+          weight: off ? MUTED_LANE_PX : LANE_PX,
           opacity: 1,
           lineCap: "butt",
         }}
@@ -617,7 +635,7 @@ export default function MapView({
         </Pane>
 
         <Pane name="reach" style={{ zIndex: 390 }}>
-          {showReach &&
+          {showFountains &&
             mapData.fountains.map((f) => (
               <Circle
                 key={f.id}
@@ -713,7 +731,8 @@ export default function MapView({
 
         {nodes.map((p) => {
           const r = results.get(p.id);
-          const color = r ? scoreColor(r.scores[metric]) : neutral;
+          const off = muted(p);
+          const color = r && !off ? scoreColor(r.scores[metric]) : neutral;
           const highlight =
             p.id === selectedId
               ? "selected"
@@ -724,14 +743,16 @@ export default function MapView({
             <Marker
               key={p.id}
               position={p.mid_wgs}
-              icon={nodeIcon(p.kind, color, highlight)}
+              icon={nodeIcon(p.kind, color, highlight, off)}
               eventHandlers={{ click: () => onSelect(p.id) }}
               keyboard
               title={pointTitle(p)}
-              // the highlighted marker's ring sits above its neighbours (but under the fix badges at 500)
+              // the highlighted marker's ring sits above its neighbours (but under the fix badges at 500), and
+              // greyed-out markers sit under the ones in play
               zIndexOffset={
                 (p.kind === "station" ? 100 : 0) +
-                (highlight === "selected" ? 300 : highlight ? 200 : 0)
+                (highlight === "selected" ? 300 : highlight ? 200 : 0) -
+                (off ? 300 : 0)
               }
             >
               <Tooltip className="cc-tooltip" direction="top" offset={[0, -14]}>
@@ -823,11 +844,6 @@ export default function MapView({
             set: setShowFountains,
           },
           {
-            label: `Water reach (${waterOk} m)`,
-            checked: showReach,
-            set: setShowReach,
-          },
-          {
             label: "Rest of the network",
             checked: showContext,
             set: setShowContext,
@@ -850,7 +866,7 @@ export default function MapView({
 
       {/* On a map too narrow for both (popup 360 + legend 208 + gaps), the open popup wins over the legend. */}
       <div className={selected && popup ? "@max-[38rem]:hidden" : undefined}>
-        <Legend metric={metric} />
+        <Legend metric={metric} filtered={kinds.size < 3} />
       </div>
     </div>
   );

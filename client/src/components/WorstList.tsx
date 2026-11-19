@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type {
   MapPointInfo,
   MetricId,
@@ -23,11 +23,11 @@ function readTop(): number {
 
 type Props = {
   metric: MetricId;
-  /** All scored points from /api/evaluate; ranked here (the server's `worst` stops at 10). */
-  points: PointResult[];
+  /** Ids of the points to fix, worst first, already narrowed by the "Where to look" filter (see rankWorst). */
+  ranked: readonly string[];
   pointsById: Map<string, MapPointInfo>;
   resultsById: Map<string, PointResult>;
-  /** Point kinds to list (the "Where to look" filter). */
+  /** Point kinds picked in "Where to look"; only used to explain an empty list. */
   kinds: ReadonlySet<PointKind>;
   selectedId?: string;
   onSelect: (id: string) => void;
@@ -36,7 +36,7 @@ type Props = {
 
 export default function WorstList({
   metric,
-  points,
+  ranked,
   pointsById,
   resultsById,
   kinds,
@@ -45,21 +45,6 @@ export default function WorstList({
   onHover,
 }: Props) {
   const [limit, setLimit] = useState(readTop);
-  // Same rule as the backend's `worst`: priority > 0, highest first, ties by id.
-  const ranked = useMemo(
-    () =>
-      points
-        .filter((r) => {
-          const kind = pointsById.get(r.id)?.kind;
-          return r.priority > 0 && kind !== undefined && kinds.has(kind);
-        })
-        .sort(
-          (a, b) =>
-            b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-        )
-        .map((r) => r.id),
-    [points, pointsById, kinds],
-  );
   const worst = ranked.slice(0, limit);
   const top = worst.length ? (resultsById.get(worst[0])?.priority ?? 0) : 0;
 

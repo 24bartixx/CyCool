@@ -42,6 +42,11 @@
 .cc-marker--station {
   border-radius: 5px;
 }
+/* A kind left out of "Where to look" (MapView's nodeIcon): grey and flat, so it recedes behind the kinds in play. */
+.cc-marker--muted {
+  border-width: 1.5px;
+  box-shadow: none;
+}
 /* Same colours as the segment highlights (SegmentHighlight): a ring around the marker keeps its score fill visible.
    The white border stays as a separator between the score colour and the ring. */
 .cc-marker--selected {

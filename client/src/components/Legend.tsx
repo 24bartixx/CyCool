@@ -2,7 +2,13 @@ import type { MetricId } from "../api/planner.ts";
 import { METRIC_SHORT } from "../lib/icons.tsx";
 import { SCORE_CLASSES, cssVar } from "../lib/scale.ts";
 
-export default function Legend({ metric }: { metric: MetricId }) {
+type Props = {
+  metric: MetricId;
+  /** Some point kinds are left out of "Where to look", so the map greys them out. */
+  filtered?: boolean;
+};
+
+export default function Legend({ metric, filtered = false }: Props) {
   return (
     <div data-map-overlay className="absolute bottom-6 left-3 z-[1000] hidden w-52 md:block rounded-xl border border-border bg-surface/95 p-3 text-[11px] shadow-sm backdrop-blur">
       <p className="mb-1.5 font-semibold text-foreground">
@@ -50,6 +56,12 @@ export default function Legend({ metric }: { metric: MetricId }) {
           />{" "}
           Current worst point
         </li>
+        {filtered && (
+          <li className="flex items-center gap-2">
+            <span className="h-1 w-3 rounded-full bg-network" aria-hidden />{" "}
+            Not in “Where to look”
+          </li>
+        )}
       </ul>
     </div>
   );

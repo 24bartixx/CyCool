@@ -12,7 +12,7 @@ import PointDrawer from '../components/PointDrawer.tsx'
 import PointTypeFilter from '../components/PointTypeFilter.tsx'
 import RecommendedFixes from '../components/RecommendedFixes.tsx'
 import WorstList from '../components/WorstList.tsx'
-import { POINT_KINDS } from '../lib/points.ts'
+import { POINT_KINDS, rankWorst } from '../lib/points.ts'
 import { useMediaQuery } from '../lib/useMediaQuery.ts'
 import { usePlanner } from '../lib/usePlanner.ts'
 
@@ -55,8 +55,11 @@ export default function PlannerPage() {
     [setSelectedId],
   )
 
-  // "Where to look": which point kinds the worst list shows. All on by default.
+  // "Where to look": which point kinds are in play. It narrows the worst list and so decides the worst point, and
+  // the map greys out the other kinds. All on by default.
   const [kinds, setKinds] = useState<Set<PointKind>>(() => new Set(POINT_KINDS))
+  // Ranked here, not taken from the server's `worst`, which ignores the filter (and stops at 10).
+  const ranked = useMemo(() => (ev ? rankWorst(ev.points, pl.pointsById, kinds) : []), [ev, pl.pointsById, kinds])
   const kindCounts = useMemo(() => {
     const counts: Record<PointKind, number> = { segment: 0, junction: 0, station: 0 }
     for (const r of ev?.points ?? []) {
@@ -67,7 +70,7 @@ export default function PlannerPage() {
   }, [ev?.points, pl.pointsById])
 
   const selected = pl.selectedId ? pl.pointsById.get(pl.selectedId) : undefined
-  const worstId = ev?.worst[0]
+  const worstId = ranked[0]
   const solarUnit = String(data?.assumptions.find((a) => a.key === 'solar_unit')?.value ?? '')
   const waterReachM = data?.assumptions.find((a) => a.key === 'water_ok_m')?.value
 
@@ -143,7 +146,7 @@ export default function PlannerPage() {
                 <PointTypeFilter value={kinds} counts={kindCounts} onChange={setKinds} />
                 <WorstList
                   metric={ev.metric}
-                  points={ev.points}
+                  ranked={ranked}
                   pointsById={pl.pointsById}
                   resultsById={pl.resultsById}
                   kinds={kinds}
@@ -164,6 +167,8 @@ export default function PlannerPage() {
                     mapData={data}
                     evaluation={ev}
                     metric={ev?.metric ?? pl.metric}
+                    kinds={kinds}
+                    worstId={worstId}
                     selectedId={pl.selectedId}
                     hoveredId={hoveredId}
                     onSelect={select}
