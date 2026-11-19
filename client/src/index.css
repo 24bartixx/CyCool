@@ -42,6 +42,15 @@
 .cc-marker--station {
   border-radius: 5px;
 }
+/* Drinking fountain (MapView's fountainIcon): context, not a clickable point. */
+.cc-marker--fountain {
+  border-radius: 9999px;
+  border-width: 1.5px;
+  background: var(--color-water);
+}
+.leaflet-marker-icon.cc-fountain-icon {
+  cursor: default;
+}
 /* A kind left out of "Where to look" (MapView's nodeIcon): grey and flat, so it recedes behind the kinds in play. */
 .cc-marker--muted {
   border-width: 1.5px;

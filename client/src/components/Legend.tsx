@@ -1,3 +1,4 @@
+import { Droplet } from "lucide-react";
 import type { MetricId } from "../api/planner.ts";
 import { METRIC_SHORT } from "../lib/icons.tsx";
 import { SCORE_CLASSES, cssVar } from "../lib/scale.ts";
@@ -30,9 +31,11 @@ export default function Legend({ metric, filtered = false }: Props) {
       <ul className="mt-2 space-y-1 border-t border-border pt-2 text-muted">
         <li className="flex items-center gap-2">
           <span
-            className="size-2.5 rounded-full bg-water ring-2 ring-white"
+            className="grid size-3 place-items-center rounded-full border border-white bg-water text-white shadow"
             aria-hidden
-          />{" "}
+          >
+            <Droplet className="size-2" strokeWidth={3} />
+          </span>{" "}
           Drinking fountain
         </li>
         <li className="flex items-center gap-2">

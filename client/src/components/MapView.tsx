@@ -1,5 +1,5 @@
 import L from "leaflet";
-import { Bike, House, Target, TrafficCone } from "lucide-react";
+import { Bike, Droplet, House, Target, TrafficCone } from "lucide-react";
 import {
   useEffect,
   useLayoutEffect,
@@ -14,7 +14,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   AttributionControl,
   Circle,
-  CircleMarker,
   GeoJSON,
   MapContainer,
   Marker,
@@ -92,6 +91,21 @@ function nodeIcon(
   iconCache.set(key, icon);
   return icon;
 }
+
+/**
+ * A drinking fountain: context, not a point to fix, so smaller than the junction and station markers and always
+ * water blue. A single droplet, where the Cyclist Oasis fix badge shows several (INT-03 in FIX_ICON).
+ */
+const FOUNTAIN_PX = 18;
+const fountainIcon = L.divIcon({
+  html: `<div class="cc-marker cc-marker--fountain" style="width:${FOUNTAIN_PX}px;height:${FOUNTAIN_PX}px">${renderToStaticMarkup(
+    <Droplet size={10} strokeWidth={2.75} aria-hidden />,
+  )}</div>`,
+  // not clickable (only a tooltip), so no pointer cursor; see .cc-fountain-icon
+  className: "cc-fountain-icon",
+  iconSize: [FOUNTAIN_PX, FOUNTAIN_PX],
+  iconAnchor: [FOUNTAIN_PX / 2, FOUNTAIN_PX / 2],
+});
 
 function fixBadge(fixId: string, slot: number): L.DivIcon {
   const Glyph = FIX_ICON[fixId];
@@ -545,8 +559,10 @@ export default function MapView({
   const muted = (p: MapPointInfo) => !kinds.has(p.kind) && p.id !== selectedId;
   const selected = selectedId ? pointsById.get(selectedId) : undefined;
   const hovered = hoveredId ? pointsById.get(hoveredId) : undefined;
-  const waterOk = Number(
-    mapData.assumptions.find((a) => a.key === "water_ok_m")?.value ?? 0,
+  // Reach drawn around fountains and oases: the distance where the water score hits 1 (worst). Outside the circle
+  // the water score is 1; inside it the score falls to 0 within water_ok_m.
+  const waterReach = Number(
+    mapData.assumptions.find((a) => a.key === "water_bad_m")?.value ?? 0,
   );
 
   const fixesByPoint = useMemo(() => {
@@ -640,7 +656,7 @@ export default function MapView({
               <Circle
                 key={f.id}
                 center={f.wgs}
-                radius={waterOk}
+                radius={waterReach}
                 interactive={false}
                 pathOptions={{
                   stroke: false,
@@ -654,7 +670,7 @@ export default function MapView({
               <Circle
                 key={`oasis-${o.point_id}`}
                 center={o.wgs}
-                radius={waterOk}
+                radius={waterReach}
                 interactive={false}
                 pathOptions={{
                   color: water,
@@ -704,28 +720,24 @@ export default function MapView({
           />
         </Pane>
 
+        {/* Above the trail lines, under the junction and station markers (Leaflet's marker pane, 600). */}
         <Pane name="fountains" style={{ zIndex: 420 }}>
           {showFountains &&
             mapData.fountains.map((f) => (
-              <CircleMarker
+              <Marker
                 key={f.id}
-                center={f.wgs}
-                radius={4}
-                pathOptions={{
-                  color: "#fff",
-                  weight: 1.5,
-                  fillColor: water,
-                  fillOpacity: 1,
-                }}
+                position={f.wgs}
+                icon={fountainIcon}
+                keyboard={false}
               >
                 <Tooltip
                   className="cc-tooltip"
                   direction="top"
-                  offset={[0, -4]}
+                  offset={[0, -10]}
                 >
                   Drinking fountain{f.location ? ` · ${f.location}` : ""}
                 </Tooltip>
-              </CircleMarker>
+              </Marker>
             ))}
         </Pane>
 
