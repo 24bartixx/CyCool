@@ -97,10 +97,10 @@ export default function BudgetPanel({ budget, spent, onChange }: Props) {
         </div>
         <div className="mt-1.5 flex justify-between text-xs">
           <span className="text-muted">
-            Committed <span className="font-semibold text-foreground">{eur(spent)}</span>
+            Committed <span className="font-semibold text-foreground" title={eur(spent)}>{eurShort(spent)}</span>
           </span>
           <span className="text-muted">
-            Left <span className="font-semibold text-foreground">{eur(remaining)}</span>
+            Left <span className="font-semibold text-foreground" title={eur(remaining)}>{eurShort(remaining)}</span>
           </span>
         </div>
       </div>

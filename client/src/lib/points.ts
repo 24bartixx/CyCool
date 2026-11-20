@@ -3,8 +3,8 @@ import type { MapPointInfo, MetricId, PointKind, PointResult, Trail } from '../a
 export const POINT_KINDS: readonly PointKind[] = ['segment', 'junction', 'station']
 
 /**
- * Ids of the points still to fix (priority > 0) of the given kinds, worst first. The same rule as the backend's
- * `worst` (highest priority, ties by id), narrowed by the "Where to look" filter. Its first id is the worst point
+ * Ids of the points still to fix (score > 0) of the given kinds, worst first. The same rule as the backend's
+ * `worst` (highest score, ties by more riders/day, then id), narrowed by the "Where to look" filter. Its first id is the worst point
  * everywhere in the UI: the list's #1, the ring on the map, "Go to worst point" and the details' "Worst" badge.
  */
 export function rankWorst(
@@ -17,7 +17,7 @@ export function rankWorst(
       const kind = pointsById.get(r.id)?.kind
       return r.priority > 0 && kind !== undefined && kinds.has(kind)
     })
-    .sort((a, b) => b.priority - a.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .sort((a, b) => b.priority - a.priority || b.riders - a.riders || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((r) => r.id)
 }
 

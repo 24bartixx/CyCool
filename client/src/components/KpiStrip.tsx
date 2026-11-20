@@ -77,68 +77,70 @@ function tiles(k: Kpis, burdenPct: number | null, metric: MetricId, waterReachM?
   const waterGain = water_reachable_km - k.before.water_reachable_km
   const strongHeatGain = below_strong_heat_km - k.before.below_strong_heat_km
   const waterDistance = waterReachM == null ? 'the configured distance' : `${waterReachM} m`
-  const strongHeat = strongHeatC == null ? 'the very strong heat threshold' : `${strongHeatC} °C`
-  const comfort = comfortC == null ? 'the comfort threshold' : `${comfortC} °C`
+  const strongHeat = strongHeatC == null ? '38 °C' : `${strongHeatC} °C`
+  const comfort = comfortC == null ? '32 °C' : `${comfortC} °C`
   const burdenCut = burdenPct != null && burdenPct >= 0.05
   const cooled = k.utci_drop_trail_avg_c != null
+  const ofNetwork = (v: number) => `${dec1(v)} / ${dec1(network_km)} km`
   return [
     {
-      label: `${METRIC_SHORT[metric]} burden reduced`,
+      label: `${METRIC_SHORT[metric]} burden cut`,
       icon: METRIC_ICON[metric],
       tone: 'cool',
       value: burdenPct == null ? DASH : burdenCut ? pct(burdenPct) : '0%',
       reduction: burdenCut,
-      sub: "of today's total, whole trail network",
+      sub: 'vs today, whole network',
       formula:
         'How much the plan lowers the burden of the selected metric, compared with today. Burden = Σ score × riders/day × seconds spent at each point (riding a piece at cycling speed, scaled to the VAS-R1 trail length; waiting at a red light, which a green wave shortens; docking at a station).',
       emphasis: true,
     },
     {
-      label: 'Comfortable trail length',
+      label: 'Comfortable km',
       icon: KPI_ICON.comfort,
       tone: 'cool',
       ...coverage(comfortable_km, k.comfortable_km_gain, network_km, 'cool', 'comfortable'),
-      sub: `${dec2(comfortable_km)} / ${km(network_km)} of network`,
-      formula: `Share of the whole network's length with UTCI below ${comfort} on a hot summer afternoon (computed from real weather, local sun and ground temperature).`,
+      sub: `${ofNetwork(comfortable_km)} · warm day`,
+      formula: `Share of the network's length with UTCI below ${comfort} (no more than moderate heat stress) on a warm summer afternoon (60th–80th percentile July–August days, ~29 °C air). Fixes keep their catalogue UTCI cut.`,
     },
     {
-      label: 'Out of very strong heat',
+      label: `Below ${strongHeat}, heatwave`,
       icon: KPI_ICON.heatStress,
       tone: 'cool',
       ...coverage(below_strong_heat_km, strongHeatGain, network_km, 'cool', `below ${strongHeat}`),
-      sub: `${dec2(below_strong_heat_km)} / ${km(network_km)} · UTCI below ${strongHeat}`,
-      formula: `Share of the whole network's length with UTCI below ${strongHeat}: at most "strong heat stress", out of the "very strong heat stress" band.`,
+      sub: ofNetwork(below_strong_heat_km),
+      formula: `Share of the network's length with UTCI below ${strongHeat} (out of "very strong heat stress") on a peak heatwave afternoon (2 hottest July–August days of 2023–2025, ~34 °C air). Fixes keep their catalogue UTCI cut.`,
     },
     {
-      label: waterReachM == null ? 'Drinking water nearby' : `Drinking water within ${waterReachM} m`,
+      label: waterReachM == null ? 'Water nearby' : `Water ≤ ${waterReachM} m`,
       icon: KPI_ICON.water,
       tone: 'water',
       ...coverage(water_reachable_km, waterGain, network_km, 'water', 'with water nearby'),
-      sub: `${dec2(water_reachable_km)} / ${km(network_km)}`,
+      sub: ofNetwork(water_reachable_km),
       formula: `A street piece counts if any part is within ${waterDistance} of a drinking fountain or cyclist oasis in a straight line.`,
     },
     {
-      label: '°C at critical points',
+      label: 'Critical points',
       icon: KPI_ICON.cooling,
       tone: 'cool',
-      value: celsius(k.critical_drop_avg_c),
-      reduction: k.critical_drop_avg_c != null,
+      value: celsius(k.critical_drop_avg_c ?? 0),
+      reduction: (k.critical_drop_avg_c ?? 0) > 0,
       sub:
         k.critical_drop_max_c != null
-          ? `${celsius(k.critical_drop_cooled_avg_c)} where cooled, max ${celsius(k.critical_drop_max_c)} · ${k.critical_cooled} of ${k.critical_total} critical points`
-          : `none of ${k.critical_total} critical points cooled yet`,
+          ? `${k.critical_cooled} of ${k.critical_total} cooled · max ${celsius(k.critical_drop_max_c)}`
+          : `0 of ${k.critical_total} cooled`,
       formula:
-        'Average modelled UTCI drop over ALL critical points (uncooled ones count 0): the 5 traffic-light junctions and every point on a trail rated "Critical" in the VAS-R1 data. Several fixes at one place combine with a discount (assumptions are listed in the PDF report). A green wave shortens the wait instead of lowering UTCI, so it does not show here.' +
+        'Average modelled UTCI drop over ALL critical points (uncooled ones count 0): the 5 traffic-light junctions plus the street pieces and stations in the hottest 10% of today’s computed UTCI. Several fixes at one place combine with a discount. A green wave shortens the wait instead of lowering UTCI, so it does not show here.' +
+        (k.critical_drop_cooled_avg_c != null ? ` Where cooled: ${celsius(k.critical_drop_cooled_avg_c)} on average.` : '') +
         (cooled ? ` Over all cooled street pieces: ${celsius(k.utci_drop_trail_avg_c)} on ${km(k.utci_cooled_trail_km)}.` : ''),
     },
     {
-      label: 'CO₂ avoided',
+      label: 'CO₂ from car trips',
       icon: KPI_ICON.co2,
       tone: 'neutral',
-      value: `${k.co2_t_per_year > 0 ? '+' : ''}${dec2(k.co2_t_per_year)} t/yr`,
-      sub: 'From trees, oases and solar canopies',
+      value: `${k.co2_trips_t_per_year > 0 ? '+' : ''}${dec2(k.co2_trips_t_per_year)} t/yr`,
+      sub: `+${dec2(k.co2_sequestration_t_per_year)} t trees · +${dec2(k.co2_pv_avoided_t_per_year)} t solar`,
       formula:
-        'Replaced trips: recovered trips/day × share that replace a car × kg CO₂ per car trip (INT-08) × summer days. Plus CO₂ captured by trees and oasis greenery, and CO₂ avoided by the solar power of station canopies (shown separately).',
+        `Replaced trips: recovered trips/day × share that replace a car × kg CO₂ per car trip (INT-08) × summer days. Shown separately below: CO₂ captured by trees and oasis greenery, and CO₂ avoided by the solar power of station canopies (total ${dec2(k.co2_t_per_year)} t/yr).`,
     },
   ]
 }
@@ -175,21 +177,22 @@ function TrailBar({ bar }: { bar: Bar }) {
 function TileView({ t, hasPlan }: { t: Tile; hasPlan: boolean }) {
   const Icon = t.icon
   return (
-    <li className={`grid min-w-[180px] flex-1 grid-cols-[auto_1fr] content-start gap-x-2.5 px-3 py-2.5 ${t.emphasis ? 'bg-primary-soft' : 'bg-surface'}`}>
-      <span
-        className={`row-span-2 grid size-8 place-items-center self-center rounded-lg ${t.emphasis ? 'bg-primary text-primary-foreground' : CHIP[t.tone]}`}
-        aria-hidden
-      >
-        <Icon className="size-4" />
-      </span>
-      <p className="flex min-w-0 items-center gap-1 text-[11px] font-medium text-muted">
-        <span className="truncate">{t.label}</span>
+    <li className={`grid min-w-[170px] flex-1 grid-cols-[auto_1fr] content-start items-center gap-x-2 px-3 py-2.5 ${t.emphasis ? 'bg-primary-soft' : 'bg-surface'}`}>
+      {/* Label on its own full-width row above the icon, so it has room and doesn't get cut. */}
+      <p className="col-span-2 mb-1.5 flex min-w-0 items-center gap-1 text-[11px] font-medium leading-tight text-muted">
+        <span className="truncate" title={t.label}>{t.label}</span>
         <span title={t.formula} className="shrink-0 cursor-help" aria-label={`How it is calculated: ${t.formula}`}>
           <Info className="size-3" aria-hidden />
         </span>
       </p>
-      <p className="flex items-center gap-2 leading-tight">
-        <span className={`flex items-center gap-0.5 text-lg font-semibold ${t.emphasis ? 'text-primary' : 'text-foreground'}`}>
+      <span
+        className={`grid size-7 place-items-center rounded-lg ${t.emphasis ? 'bg-primary text-primary-foreground' : CHIP[t.tone]}`}
+        aria-hidden
+      >
+        <Icon className="size-3.5" />
+      </span>
+      <p className="flex min-w-0 flex-wrap items-center gap-x-2 leading-tight">
+        <span className={`flex items-center gap-0.5 text-base font-semibold ${t.emphasis ? 'text-primary' : 'text-foreground'}`}>
           {t.reduction && <ArrowDown className="size-4 text-gain" strokeWidth={2.5} aria-hidden />}
           {t.value}
         </span>
@@ -198,7 +201,7 @@ function TileView({ t, hasPlan }: { t: Tile; hasPlan: boolean }) {
       {/* Tiles without a bar keep its space so every sub-line sits on the same row. */}
       {t.bar ? <TrailBar bar={t.bar} /> : <div className="col-span-2 mt-2 h-1" aria-hidden />}
       {t.sub && (
-        <p className="col-span-2 mt-1 text-[11px] text-muted" title={t.sub}>
+        <p className="col-span-2 mt-1 min-w-0 truncate text-[11px] text-muted" title={t.sub}>
           {t.sub}
         </p>
       )}
@@ -214,11 +217,11 @@ function KpiStrip({ kpis, burdenPct, metric, fixCount, waterReachM, strongHeatC,
         {kpis
           ? tiles(kpis, burdenPct, metric, waterReachM, strongHeatC, comfortC).map((t) => <TileView key={t.label} t={t} hasPlan={hasPlan} />)
           : Array.from({ length: 6 }, (_, i) => (
-              <li key={i} className="flex min-w-[180px] flex-1 items-center gap-2.5 bg-surface px-3 py-2.5">
-                <div className="cc-skeleton size-8 rounded-lg" />
-                <div>
-                  <div className="cc-skeleton h-3 w-20" />
-                  <div className="cc-skeleton mt-2 h-5 w-16" />
+              <li key={i} className="min-w-[170px] flex-1 bg-surface px-3 py-2.5">
+                <div className="cc-skeleton h-3 w-20" />
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="cc-skeleton size-7 rounded-lg" />
+                  <div className="cc-skeleton h-5 w-16" />
                 </div>
               </li>
             ))}

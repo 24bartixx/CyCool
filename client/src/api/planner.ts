@@ -144,8 +144,10 @@ export type PointResult = {
     wait_s?: number
     shade_pct?: number
   }
-  /** Ranking value of the worst list: score × riders/day at the point (trail riders; station users at a station). */
+  /** Ranking value of the worst list: the selected metric's score (0 = fine, 1 = worst). */
   priority: number
+  /** Riders/day at the point; breaks ties in the worst list. */
+  riders: number
   /** Contribution to the burden: score × riders × seconds spent there, in rider-hours/day. */
   burden: number
 }
@@ -186,7 +188,13 @@ export type Kpis = {
   eur_per_comfortable_km: number | null
   eur_per_new_cyclist: number | null
   opex_eur_per_new_cyclist_year: number | null
+  /** Investment spread over each fix's service life, plus upkeep. */
+  annual_cost_eur: number
+  eur_per_new_cyclist_year: number | null
+  /** Average over new cyclists (only the car share saves). */
   eur_saved_per_cyclist_year: number
+  /** A cyclist who leaves the car on every trip. */
+  eur_saved_car_switcher_year: number
   eur_saved_total_year: number
 }
 

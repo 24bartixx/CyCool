@@ -14,16 +14,39 @@ EPS = 1e-9
 PV_FIXES = ("INT-06",)  # CO2 avoided by solar power, not captured by plants
 
 
+def fix_lifetimes(a: dict) -> dict[str, float]:
+    """{fix id: service life in years}, from entries like "INT-01 → 30"."""
+    out = {}
+    for entry in a["fix_lifetime_yr"]:
+        fix_id, years = (part.strip() for part in entry.split("→"))
+        out[fix_id] = float(years)
+    return out
+
+
 def _ratio(numerator: float, denominator: float) -> float | None:
     return numerator / denominator if denominator > EPS else None
 
 
+def _scenario_utci(ds: Dataset, state: dict[str, PointState], scenario: str, point_id: str) -> float:
+    """UTCI of a point in a KPI weather scenario: that scenario's baseline minus the plan's UTCI cut here."""
+    s = state[point_id]
+    return ds.scenario_utci[scenario][point_id] - (s.utci_base - s.utci)
+
+
 def _network_state_kpis(ds: Dataset, state: dict[str, PointState]) -> dict[str, float]:
-    """Km of the whole built network (every piece, on or off the trails)."""
+    """Km of the whole built network (every piece, on or off the trails).
+
+    Comfortable km are judged on a typical summer afternoon and very strong heat on a heatwave afternoon,
+    each with its standard UTCI threshold, so neither reads 0% or 100% today by construction.
+    """
     a = ds.assumptions
     segs = [p for p in ds.points if p.kind == "segment"]
-    comfortable_m = sum(p.length_m for p in segs if state[p.id].utci < a["comfortable_utci_c"])
-    below_strong_heat_m = sum(p.length_m for p in segs if state[p.id].utci < a["strong_heat_utci_c"])
+    comfortable_m = sum(
+        p.length_m for p in segs if _scenario_utci(ds, state, "typical", p.id) < a["comfortable_utci_c"]
+    )
+    below_strong_heat_m = sum(
+        p.length_m for p in segs if _scenario_utci(ds, state, "heatwave", p.id) < a["strong_heat_utci_c"]
+    )
     water_m = sum(p.length_m for p in segs if state[p.id].water_dist_m <= a["water_ok_m"])
     total_m = sum(p.length_m for p in segs)
     return {
@@ -76,7 +99,7 @@ def compute_kpis(
     critical_total = 0
     for point in ds.points:
         drop = base[point.id].utci - now[point.id].utci
-        critical = point.kind == "junction" or (point.trail_id is not None and ds.trails[point.trail_id].critical)
+        critical = point.id in ds.critical_ids
         critical_total += critical
         if drop <= EPS:
             continue
@@ -88,22 +111,31 @@ def compute_kpis(
 
     # Riders won back -> trips -> new summer cyclists; only trips that replace a car save CO2 and money.
     recovered = _recovered_riders(ds, base, now)
-    rider_km = sum(r * ds.trails[t].synthetic_length_km for t, r in recovered.items())
-    trips_per_day = rider_km / float(a["avg_trip_km"])
+    # A won-back rider rides the trail, but at most one average trip, so long trails don't inflate trips.
+    trip_km = float(a["avg_trip_km"])
+    rider_km = sum(r * min(ds.trails[t].synthetic_length_km, trip_km) for t, r in recovered.items())
+    trips_per_day = rider_km / trip_km
     new_cyclists = trips_per_day / float(a["trips_per_cyclist_day"])
     car_share = float(a["car_trip_share"])
     co2_trips_t = trips_per_day * car_share * float(ds.modal_shift["co2_kg_yr"]) * float(a["summer_days"]) / 1000
-    eur_saved_per_cyclist = car_share * float(a["trips_per_cyclist_day"]) * float(a["eur_per_trip"]) * float(a["summer_days"])
+    eur_saved_car_switcher = float(a["trips_per_cyclist_day"]) * float(a["eur_per_trip"]) * float(a["summer_days"])
+    eur_saved_per_cyclist = car_share * eur_saved_car_switcher
 
     capex = sum(f.cost_eur for f in plan)
     opex = sum(f.opex_eur_yr for f in plan)
+    lifetimes = fix_lifetimes(a)
+    annual_cost = sum(f.cost_eur / lifetimes[f.fix_id] for f in plan) + opex
     sequestration_t = sum(f.co2_kg_yr for f in plan if f.fix_id not in PV_FIXES) / 1000
     pv_avoided_t = sum(f.co2_kg_yr for f in plan if f.fix_id in PV_FIXES) / 1000
     comfortable_gain = after["comfortable_km"] - before["comfortable_km"]
 
-    # km adapted: pieces under trees or cool pavement, priced by those fixes only.
+    # km adapted: pieces under trees or cool pavement that are cooled by at least the adapted threshold.
+    # Every tree and cool-pavement euro counts in the cost, also on pieces that stay below the threshold.
+    min_drop = float(a["adapted_min_utci_drop_c"])
     linear = [f for f in plan if FIX_RULES[f.fix_id]["linear"]]
-    adapted = {p.id for f in linear for p in _fixed_pieces(ds, f)}
+    adapted = {
+        p.id for f in linear for p in _fixed_pieces(ds, f) if base[p.id].utci - now[p.id].utci >= min_drop - EPS
+    }
     adapted_km = sum(ds.points_by_id[pid].length_m for pid in adapted) / 1000
     linear_capex = sum(f.cost_eur for f in linear)
 
@@ -134,7 +166,11 @@ def compute_kpis(
         "eur_per_comfortable_km": _ratio(capex, comfortable_gain),
         "eur_per_new_cyclist": _ratio(capex, new_cyclists),
         "opex_eur_per_new_cyclist_year": _ratio(opex, new_cyclists),
+        # Investment spread over each fix's service life, plus upkeep, per new summer cyclist.
+        "annual_cost_eur": annual_cost,
+        "eur_per_new_cyclist_year": _ratio(annual_cost, new_cyclists),
         "eur_saved_per_cyclist_year": eur_saved_per_cyclist,
+        "eur_saved_car_switcher_year": eur_saved_car_switcher,
         "eur_saved_total_year": new_cyclists * eur_saved_per_cyclist,
     }
 

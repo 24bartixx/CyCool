@@ -13,6 +13,22 @@ export const km = (v: number | null | undefined) => (v == null ? DASH : `${num2.
 export const metres = (v: number | null | undefined) => (v == null ? DASH : `${num0.format(v)} m`)
 export const celsius = (v: number | null | undefined) => (v == null ? DASH : `${num1.format(v)} °C`)
 
-/** Compact euros for presets and chips: €25k, €1.2M. */
-export const eurShort = (v: number) =>
-  v >= 1_000_000 ? `€${num1.format(v / 1_000_000)}M` : v >= 1000 ? `€${num0.format(v / 1000)}k` : eur0.format(v)
+const upTo1 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 })
+
+/**
+ * Compact euros for the UI: €850, €5.2k, €12k, €1.2M (no trailing ".0", no long runs of zeros).
+ * One decimal below 10k / 10M, where it still matters; whole thousands / millions above.
+ */
+export const eurShort = (v: number | null | undefined) => {
+  if (v == null || !Number.isFinite(v)) return DASH
+  const sign = v < 0 ? '−' : ''
+  const a = Math.abs(v)
+  if (a >= 1_000_000) return `${sign}€${(a >= 10_000_000 ? num0 : upTo1).format(a / 1_000_000)}M`
+  if (a >= 999.5) {
+    const k = a / 1000
+    // 999,960 would round to "1,000k": show it as €1M instead.
+    if (k >= 999.5) return `${sign}€1M`
+    return `${sign}€${(k >= 9.95 ? num0 : upTo1).format(k)}k`
+  }
+  return `${sign}${eur0.format(a)}`
+}

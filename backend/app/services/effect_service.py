@@ -17,9 +17,17 @@ FIX_RULES: dict[str, dict] = {
     "INT-02": {"label": "Shade sail at waiting box", "kinds": {"junction"}, "linear": False},
     "INT-03": {"label": "Cyclist oasis", "kinds": {"segment", "station"}, "linear": False},
     "INT-04": {"label": "Cool pavement", "kinds": {"segment"}, "linear": True},
-    "INT-05": {"label": "Green-wave traffic lights", "kinds": {"junction"}, "linear": False},
+    # Offered only under the combined metric: it shortens the wait, which only the combined score counts.
+    "INT-05": {"label": "Green-wave traffic lights", "kinds": {"junction"}, "linear": False, "metrics": {"combined"}},
     "INT-06": {"label": "Station solar canopy", "kinds": {"station"}, "linear": False},
 }
+
+
+def offered(fix_id: str, metric: str) -> bool:
+    """Whether a fix is offered (recommended, auto-planned) under the selected metric. A fix already in the
+    plan stays valid under every metric; this only controls what can be picked."""
+    allowed = FIX_RULES[fix_id].get("metrics")
+    return allowed is None or metric in allowed
 
 
 class PlanError(ValueError):
@@ -194,7 +202,7 @@ def effect_summary(ds: Dataset, fix_id: str) -> list[str]:
     if fix_id == "INT-02":
         return [utci, "waiting box fully shaded"]
     if fix_id == "INT-05":
-        return [f"red-light wait ≤ {a['green_wave_wait_s']} s", "less time in the heat, same temperature"]
+        return [f"red-light wait ≤ {a['green_wave_wait_s']} s", "less time in the heat, same temperature", "lowers the combined score"]
     if fix_id == "INT-06":
         return [utci, f"sun −{a['canopy_solar_cut']:.0%}", f"{cat['co2_kg_yr']:.0f} kg CO₂/yr"]
     if fix_id == "INT-03":

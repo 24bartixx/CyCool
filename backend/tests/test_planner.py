@@ -8,6 +8,7 @@ from app.main import app
 from app.services.dataset import get_dataset
 from app.services.effect_service import PlanError, baseline_state, plan_state, validate_plan
 from app.services.heat_model import place_heat
+from app.services.kpi_service import fix_lifetimes
 from app.services.metric_service import burden, exposure_s, score_point
 from app.services.planner_service import auto_plan, evaluate, recommend
 
@@ -218,34 +219,46 @@ def test_trail_utci_drop_weights_cooled_sections_by_length():
     assert k["utci_drop_trail_avg_c"] == pytest.approx((short_drop * short.length_m + pavement_drop * long.length_m) / cooled_m)
 
 
-def test_cooling_a_hot_trail_makes_it_comfortable():
-    trail = "TRM-04"  # computed UTCI ~35.6 °C, minus trees 4.5 and half of cool pavement 1.8 = ~30.2 < 32
+def test_comfort_and_heatwave_kpis_have_a_real_baseline():
+    k = evaluate(ds, "heat", 50_000, [])["kpis"]["before"]
+    assert 0 < k["comfortable_km"] < k["network_km"]
+    assert 0 < k["below_strong_heat_km"] < k["network_km"]
+
+
+def test_cooling_a_warm_trail_makes_it_comfortable():
+    typical = ds.scenario_utci["typical"]
+    trail = max(ds.trails, key=lambda t: sum(
+        p.length_m for p in ds.points if p.trail_id == t and p.kind == "segment" and typical[p.id] >= A["comfortable_utci_c"]
+    ))
     segs = [ps[0].id for ps in ds.pieces_by_segment.values() if ps[0].trail_id == trail]  # one per real segment
     accepted = [("INT-01", s) for s in segs] + [("INT-04", s) for s in segs]
     k = evaluate(ds, "heat", 1e7, accepted)["kpis"]
     pieces = [p for p in ds.points if p.kind == "segment" and p.trail_id == trail]
-    already_km = sum(p.length_m for p in pieces if ds.base_utci[p.id] < A["comfortable_utci_c"]) / 1000
-    real_km = ds.trails[trail].raw["real_length_m"] / 1000
-    assert math.isclose(k["comfortable_km_gain"], real_km - already_km, abs_tol=1e-3)  # rounded to 0.1 m
+    warm_km = sum(p.length_m for p in pieces if typical[p.id] >= A["comfortable_utci_c"]) / 1000
+    assert warm_km > 0
+    assert math.isclose(k["comfortable_km_gain"], warm_km, abs_tol=1e-3)  # trees + pavement cool any piece by >4.5 °C
     assert k["eur_per_comfortable_km"] is not None
+    real_km = ds.trails[trail].raw["real_length_m"] / 1000
     assert math.isclose(k["adapted_km"], real_km, abs_tol=1e-3)
 
 
-def test_trees_lift_a_very_hot_piece_out_of_very_strong_heat(monkeypatch):
-    # On the model's hot afternoon no street reaches 38 °C, so the threshold is lowered into the network's
-    # range. Trees (−4.5 °C) cover the whole real segment: pick one whose pieces are all above the threshold
-    # today and all drop below it, but stay above 32 °C.
-    monkeypatch.setitem(A, "strong_heat_utci_c", 37.0)
+def test_trees_lift_a_piece_out_of_very_strong_heat_on_a_heatwave():
+    hot = ds.scenario_utci["heatwave"]
     cut = -ds.catalogue["INT-01"]["utci_reduction_c"]
-
-    def lifted(u: float) -> bool:
-        return u >= A["strong_heat_utci_c"] and A["comfortable_utci_c"] <= u - cut < A["strong_heat_utci_c"]
-
-    pieces = next(ps for ps in ds.pieces_by_segment.values() if all(lifted(ds.base_utci[p.id]) for p in ps))
+    pieces = next(ps for ps in ds.pieces_by_segment.values() if all(hot[p.id] >= A["strong_heat_utci_c"] for p in ps))
     k = evaluate(ds, "heat", 1e7, [("INT-01", pieces[0].id)])["kpis"]
     gain = k["after"]["below_strong_heat_km"] - k["before"]["below_strong_heat_km"]
+    assert all(hot[p.id] - cut < A["strong_heat_utci_c"] for p in pieces)
     assert gain == pytest.approx(sum(p.length_m for p in pieces) / 1000)
-    assert k["comfortable_km_gain"] == 0
+
+
+def test_critical_points_are_junctions_and_the_hottest_places():
+    computed = [ds.base_utci[p.id] for p in ds.points if p.kind != "junction"]
+    cut = sorted(computed)[int(len(computed) * A["critical_utci_percentile"] / 100)]
+    assert all(p.id in ds.critical_ids for p in ds.points if p.kind == "junction")
+    crit = [p for p in ds.points if p.kind != "junction" and p.id in ds.critical_ids]
+    assert crit and all(ds.base_utci[p.id] >= cut - 0.05 for p in crit)
+    assert 0.08 < len(crit) / len(computed) < 0.12
 
 
 def test_api_endpoints():
@@ -344,6 +357,35 @@ def test_junction_fixes_win_back_riders_and_car_share_scales_co2(monkeypatch):
     assert half["new_summer_cyclists"] == pytest.approx(k["new_summer_cyclists"])
 
 
+def test_cool_pavement_alone_is_not_adapted_but_its_cost_counts():
+    seg = next(ps for ps in ds.pieces_by_segment.values() if len(ps) == 1)[0]
+    k = evaluate(ds, "heat", 1e7, [("INT-04", seg.id)])["kpis"]
+    assert -ds.catalogue["INT-04"]["utci_reduction_c"] < A["adapted_min_utci_drop_c"]
+    assert k["adapted_km"] == 0 and k["eur_per_adapted_km"] is None
+    both = evaluate(ds, "heat", 1e7, [("INT-04", seg.id), ("INT-01", seg.id)])["kpis"]
+    assert both["adapted_km"] == pytest.approx(seg.length_m / 1000)
+    assert both["adapted_capex_eur"] == pytest.approx(both["capex_eur"])  # pavement cost stays in the ratio
+
+
+def test_every_fix_has_a_lifetime_and_yearly_cost_per_cyclist():
+    from app.services.effect_service import FIX_RULES
+
+    life = fix_lifetimes(A)
+    assert set(FIX_RULES) <= set(life) and all(v > 0 for v in life.values())
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    k = evaluate(ds, "heat", 50_000, [("INT-05", junction.id)])["kpis"]
+    expected = (k["capex_eur"] / life["INT-05"] + k["opex_eur_per_year"]) / k["new_summer_cyclists"]
+    assert k["eur_per_new_cyclist_year"] == pytest.approx(expected)
+    assert k["eur_saved_per_cyclist_year"] == pytest.approx(A["car_trip_share"] * k["eur_saved_car_switcher_year"])
+
+
+def test_rider_km_per_trail_is_capped_at_one_trip():
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    k = evaluate(ds, "heat", 50_000, [("INT-05", junction.id)])["kpis"]
+    # Each won-back rider is at most one trip, so trips can't exceed riders.
+    assert k["recovered_trips_per_day"] <= k["recovered_riders_per_day"] + 1e-9
+
+
 def test_canopy_co2_is_reported_as_avoided_not_sequestered():
     station = first("station")
     k = evaluate(ds, "heat", 50_000, [("INT-06", station.id)])["kpis"]
@@ -360,3 +402,28 @@ def test_auto_plan_beats_every_single_fix():
             if o["status"] == "available":
                 single = evaluate(ds, "heat", budget, [(o["fix_id"], pid)])["burden"]["current"]
                 assert auto <= single + 1e-9
+
+
+def test_green_wave_lowers_the_junction_combined_score_once():
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    base = baseline_state(ds)
+    after = plan_state(ds, [("INT-05", junction.id)])
+    before_sc, after_sc = score_point(ds, junction, base[junction.id]), score_point(ds, junction, after[junction.id])
+    assert after_sc.combined < before_sc.combined
+    assert after_sc.heat == before_sc.heat and after_sc.sun == before_sc.sun  # only the wait changed
+    # Combined burden: the wait counts through the score, the time stays the original wait.
+    b0 = burden(ds, junction, base[junction.id], before_sc.combined, "combined")
+    b1 = burden(ds, junction, after[junction.id], after_sc.combined, "combined")
+    assert b1 / b0 == pytest.approx(after_sc.combined / before_sc.combined)
+    options = recommend(ds, "combined", 50_000, [], junction.id)["options"]
+    assert next(o for o in options if o["fix_id"] == "INT-05")["status"] == "available"
+
+
+def test_green_wave_is_offered_only_under_combined():
+    junction = max((p for p in ds.points if p.kind == "junction"), key=lambda p: p.wait_s)
+    for metric in ("heat", "sun", "water"):
+        assert all(o["fix_id"] != "INT-05" for o in recommend(ds, metric, 50_000, [], junction.id)["options"])
+        assert all(f["fix_id"] != "INT-05" for f in auto_plan(ds, metric, 1e6, [])["added"])
+    # Already in the plan: still shown as applied, and the plan stays valid under any metric.
+    options = recommend(ds, "heat", 50_000, [("INT-05", junction.id)], junction.id)["options"]
+    assert next(o for o in options if o["fix_id"] == "INT-05")["status"] == "applied"

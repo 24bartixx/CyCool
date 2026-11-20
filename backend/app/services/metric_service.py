@@ -1,11 +1,13 @@
 """Scores (0 = fine, 1 = worst), ranking and burden for every point of the network.
 
-- severity (ranks the worst list) = score x riders/day at the point. It does not depend on how long a
-  trail piece happens to be, so cutting the network differently doesn't reorder the list.
+- the worst list is ranked by the score alone (worst first); ties go to the point with more riders/day.
+  It does not depend on how long a trail piece happens to be.
 - burden (what a plan reduces) = score x riders/day x seconds a rider spends there, in rider-hours.
   Pieces: length / cycling speed, on a trail scaled so its total ride time matches its VAS-R1 length;
   junctions: their red-light wait (a green wave shortens it); stations: the dwell time.
-  A fix counts through the score, except the green wave, which counts through the time.
+  A fix counts through the score, except the green wave, which counts through the time - and, in the
+  combined metric, through the junction's wait score instead (its time stays the original wait there, so
+  the green wave is not counted twice).
 """
 
 from __future__ import annotations
@@ -44,6 +46,13 @@ def solar_score(ds: Dataset, solar: float) -> float:
     return clamp01((solar - ds.solar_min) / (ds.solar_max - ds.solar_min))
 
 
+def wait_score(ds: Dataset, s: PointState) -> float:
+    """Red-light wait at a junction: 0 at the green-wave wait, 1 at the long catalogue wait."""
+    a = ds.assumptions
+    ok, bad = float(a["wait_ok_s"]), float(a["wait_bad_s"])
+    return clamp01((s.wait_s - ok) / (bad - ok))
+
+
 def unshaded_share(s: PointState) -> float:
     """Share of the red-light waiting box in full sun."""
     return clamp01(1 - s.shade_pct / 100)
@@ -58,7 +67,12 @@ def score_point(ds: Dataset, p: MapPoint, s: PointState) -> Scores:
         sun = (sun + unshaded_share(s)) / 2
     heat = clamp01((s.utci - a["utci_ok_c"]) / (a["utci_bad_c"] - a["utci_ok_c"]))
     ww, ws, wh = combined_weights(ds)
-    return Scores(water=water, sun=sun, heat=heat, combined=ww * water + ws * sun + wh * heat)
+    combined = ww * water + ws * sun + wh * heat
+    if p.kind == "junction":
+        # Junctions add the red-light wait in the sun to the combined score (weights renormalised).
+        wq = float(a["weight_wait"])
+        combined = (combined + wq * wait_score(ds, s)) / (1 + wq)
+    return Scores(water=water, sun=sun, heat=heat, combined=combined)
 
 
 def riders(ds: Dataset, p: MapPoint) -> float:
@@ -76,24 +90,26 @@ def riders(ds: Dataset, p: MapPoint) -> float:
     return trail_riders
 
 
-def exposure_s(ds: Dataset, p: MapPoint, s: PointState) -> float:
-    """Seconds a rider spends at the point."""
+def exposure_s(ds: Dataset, p: MapPoint, s: PointState, metric: str | None = None) -> float:
+    """Seconds a rider spends at the point. In the combined metric a junction keeps its original wait,
+    because the wait is already inside the combined score there."""
     a = ds.assumptions
     if p.kind == "segment":
         scale = ds.trails[p.trail_id].length_scale if p.trail_id is not None else 1.0
         return p.length_m * scale / float(a["cycling_speed_ms"])
     if p.kind == "junction":
-        return s.wait_s
+        return p.wait_s if metric == "combined" else s.wait_s
     return float(a["station_dwell_s"])
 
 
-def severity(ds: Dataset, p: MapPoint, score: float) -> float:
-    return score * riders(ds, p)
+def rank_key(ds: Dataset, p: MapPoint, score: float) -> tuple[float, float, str]:
+    """Sort key of the worst list: highest score first, then more riders/day, then id."""
+    return (-round(score, 4), -riders(ds, p), p.id)
 
 
-def burden(ds: Dataset, p: MapPoint, s: PointState, score: float) -> float:
+def burden(ds: Dataset, p: MapPoint, s: PointState, score: float, metric: str | None = None) -> float:
     """Score-weighted rider-hours per day at this point."""
-    return score * riders(ds, p) * exposure_s(ds, p, s) / 3600
+    return score * riders(ds, p) * exposure_s(ds, p, s, metric) / 3600
 
 
 def score_all(ds: Dataset, state: dict[str, PointState]) -> dict[str, Scores]:
@@ -101,4 +117,4 @@ def score_all(ds: Dataset, state: dict[str, PointState]) -> dict[str, Scores]:
 
 
 def total_burden(ds: Dataset, state: dict[str, PointState], scores: dict[str, Scores], metric: str) -> float:
-    return sum(burden(ds, p, state[p.id], scores[p.id].get(metric)) for p in ds.points)
+    return sum(burden(ds, p, state[p.id], scores[p.id].get(metric), metric) for p in ds.points)

@@ -59,10 +59,17 @@ class DesignWeather:
 
 
 def design_weather(rows: list[dict[str, Any]], hour: int, hot_pct: float, overpass_hours: list[int]) -> DesignWeather:
-    """Hot-day composite: the days whose air temperature at `hour` is at or above the `hot_pct` percentile
-    of all days, each variable averaged over those days at that hour (so the values come from the same real
-    afternoons and stay physically consistent). The overpass temperature is the median over all days of the
-    mean of `overpass_hours`, like the Landsat median composite it is compared with."""
+    """Hot-day composite: the days whose air temperature at `hour` is at or above the `hot_pct` percentile."""
+    return weather_between(rows, hour, hot_pct, 100.0, overpass_hours)
+
+
+def weather_between(
+    rows: list[dict[str, Any]], hour: int, lo_pct: float, hi_pct: float, overpass_hours: list[int]
+) -> DesignWeather:
+    """Composite of the days whose air temperature at `hour` lies between the `lo_pct` and `hi_pct`
+    percentiles of all days, each variable averaged over those days at that hour (so the values come from
+    the same real afternoons and stay physically consistent). The overpass temperature is the median over
+    all days of the mean of `overpass_hours`, like the Landsat median composite it is compared with."""
 
     def at(r: dict[str, Any]) -> datetime:
         return r["time"] if isinstance(r["time"], datetime) else datetime.fromisoformat(str(r["time"]))
@@ -71,8 +78,8 @@ def design_weather(rows: list[dict[str, Any]], hour: int, hot_pct: float, overpa
     if not at_hour:
         raise RuntimeError(f"weather_hour has no rows at {hour}:00. Run: python scripts/export_to_db.py")
     temps = sorted(float(r["temp_c"]) for r in at_hour)
-    cut = float(np.percentile(temps, hot_pct))
-    hot = [r for r in at_hour if float(r["temp_c"]) >= cut]
+    lo, hi = (float(np.percentile(temps, q)) for q in (lo_pct, hi_pct))
+    picked = [r for r in at_hour if lo <= float(r["temp_c"]) <= hi]
 
     by_day: dict[str, list[float]] = {}
     for r in rows:
@@ -80,11 +87,11 @@ def design_weather(rows: list[dict[str, Any]], hour: int, hot_pct: float, overpa
             by_day.setdefault(at(r).date().isoformat(), []).append(float(r["temp_c"]))
 
     def avg(key: str) -> float:
-        return mean(float(r[key]) for r in hot)
+        return mean(float(r[key]) for r in picked)
 
     return DesignWeather(
         hour=hour,
-        days=len(hot),
+        days=len(picked),
         days_total=len(at_hour),
         temp_c=avg("temp_c"),
         rh_pct=avg("rh_pct"),

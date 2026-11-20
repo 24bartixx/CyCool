@@ -1,7 +1,7 @@
 import { ArrowRight, Check, CircleCheck, Info, LoaderCircle, Thermometer, TriangleAlert } from 'lucide-react'
 import { useId } from 'react'
 import type { FixImpact, FixOption, MapPointInfo, MetricId, Recommendation } from '../api/planner.ts'
-import { dec1, dec2, eur } from '../lib/format.ts'
+import { dec1, dec2, eurShort } from '../lib/format.ts'
 import { FIX_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 import ScoreChip from './ScoreChip.tsx'
 
@@ -133,7 +133,7 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
             disabled={disabled}
             className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-border disabled:text-muted"
           >
-            <Check className="size-4" aria-hidden /> Accept for {eur(o.cost_eur)}
+            <Check className="size-4" aria-hidden /> Accept for {eurShort(o.cost_eur)}
           </button>
           {o.status === 'over_budget' && (
             <p className="mt-2.5 flex items-center gap-1 text-xs text-warning">

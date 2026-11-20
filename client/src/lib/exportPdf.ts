@@ -222,6 +222,7 @@ export function buildPlanPdf({
   const comfortC = assumption("comfortable_utci_c");
   const strongHeatC = assumption("strong_heat_utci_c");
   const waterM = assumption("water_ok_m");
+  const adaptedC = assumption("adapted_min_utci_drop_c");
   const metricLabel =
     mapData.metrics.find((m) => m.id === ev.metric)?.label ?? ev.metric;
   const catalogue = new Map(mapData.catalogue.map((c) => [c.id, c]));
@@ -274,13 +275,13 @@ export function buildPlanPdf({
           : change(r >= 0.05 ? `-${dec1(r)}%` : "no change", r >= 0.05),
       ],
       coverageRow(
-        `Comfortable trail length (UTCI below ${comfortC ?? "?"} °C)`,
+        `Comfortable km (UTCI below ${comfortC ?? "?"} °C, warm summer day)`,
         k.before.comfortable_km,
         k.after.comfortable_km,
         k.after.network_km,
       ),
       coverageRow(
-        `Out of very strong heat (UTCI below ${strongHeatC ?? "?"} °C)`,
+        `Out of very strong heat (UTCI below ${strongHeatC ?? "?"} °C, heatwave day)`,
         k.before.below_strong_heat_km,
         k.after.below_strong_heat_km,
         k.after.network_km,
@@ -311,9 +312,9 @@ export function buildPlanPdf({
           : "no trail section cooled",
       ],
       [
-        "UTCI drop at critical points (average over all of them)",
+        "UTCI drop at critical points (junctions + hottest 10%; average over all)",
         k.critical_drop_avg_c == null
-          ? `${DASH} (none of ${int(k.critical_total)} cooled)`
+          ? `0.0 °C (none of ${int(k.critical_total)} cooled)`
           : `-${celsius(k.critical_drop_avg_c)}; -${celsius(k.critical_drop_cooled_avg_c)} at the ${int(k.critical_cooled)} of ${int(k.critical_total)} cooled, max -${celsius(k.critical_drop_max_c)}`,
       ],
       [
@@ -321,26 +322,36 @@ export function buildPlanPdf({
         `${dec1(k.new_summer_cyclists)} cyclists (${dec1(k.recovered_trips_per_day)} trips per day)`,
       ],
       [
-        "CO2 avoided",
-        `${dec2(k.co2_t_per_year)} t CO2e per year: ${dec2(k.co2_trips_t_per_year)} t replaced car trips, ${dec2(k.co2_sequestration_t_per_year)} t trees and oases, ${dec2(k.co2_pv_avoided_t_per_year)} t solar canopies`,
+        "CO2 avoided by replaced trips",
+        `${dec2(k.co2_trips_t_per_year)} t CO2e per year (plus ${dec2(k.co2_sequestration_t_per_year)} t trees and oases, ${dec2(k.co2_pv_avoided_t_per_year)} t solar canopies; total ${dec2(k.co2_t_per_year)} t)`,
       ],
       ["Investment (one-off)", eur(k.capex_eur)],
       ["Yearly upkeep", `${eur(k.opex_eur_per_year)} per year`],
       [
-        "Cost per km adapted (trees, cool pavement)",
+        `Cost per km adapted (trees, cool pavement; cooled by ${adaptedC ?? "?"} °C or more)`,
         k.eur_per_adapted_km == null
-          ? `${DASH} (no street piece got trees or cool pavement)`
+          ? `${DASH} (no street piece cooled enough by trees or cool pavement)`
           : `${eur(k.eur_per_adapted_km)} per km on ${km(k.adapted_km)}`,
       ],
       [
+        "Cost per km made comfortable (whole plan)",
+        k.eur_per_comfortable_km == null
+          ? `${DASH} (no km made comfortable)`
+          : eur(k.eur_per_comfortable_km),
+      ],
+      [
         "Cost per summer cyclist won back",
-        k.eur_per_new_cyclist == null
+        k.eur_per_new_cyclist_year == null
           ? DASH
-          : `${eur(k.eur_per_new_cyclist)} + ${eur(k.opex_eur_per_new_cyclist_year ?? 0)} per year`,
+          : `${eur(k.eur_per_new_cyclist_year)} per year (investment over service life + upkeep); ${eur(k.eur_per_new_cyclist ?? 0)} one-off`,
       ],
       [
         "Saved per cyclist per year on travel",
-        eur(k.eur_saved_per_cyclist_year),
+        `${eur(k.eur_saved_per_cyclist_year)} on average; ${eur(k.eur_saved_car_switcher_year)} for one who leaves the car`,
+      ],
+      [
+        "Saved by all new cyclists per year",
+        eur(k.eur_saved_total_year),
       ],
     ],
     columnStyles: { 0: { cellWidth: 82 }, 1: { cellWidth: 100 } },

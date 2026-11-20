@@ -28,18 +28,20 @@ The services then work on this in memory; the API stays stateless.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 from shapely.geometry import LineString, Point
 from shapely.geometry.base import BaseGeometry
 from sqlalchemy import Connection, text
 
 from app.db.session import engine
-from app.services.heat_model import DesignWeather, design_weather, place_heat
+from app.services.heat_model import DesignWeather, design_weather, place_heat, weather_between
 
 APP_DIR = Path(__file__).resolve().parent.parent
 ASSUMPTIONS_FILE = APP_DIR / "config" / "assumptions.yaml"
@@ -128,6 +130,10 @@ class Dataset:
     weather: DesignWeather  # the hot summer afternoon the UTCI model is evaluated for
     off_trail_spring_ratio: float  # spring / summer riders over the trails, applied to off-trail pieces
     base_utci: dict[str, float]  # baseline UTCI per point
+    # KPI scenarios: {"typical" | "heatwave": weather} and {scenario: {point id: baseline UTCI}}
+    scenario_weather: dict[str, DesignWeather]
+    scenario_utci: dict[str, dict[str, float]]
+    critical_ids: frozenset[str]  # the 5 junctions + pieces and stations in today's hottest UTCI percentile
 
 
 # ---------------------------------------------------------------- SQL
@@ -700,6 +706,14 @@ def _heat(
     return base, inputs
 
 
+def _critical_ids(points: list[MapPoint], base_utci: dict[str, float], pct: float) -> frozenset[str]:
+    """Critical points: every traffic-light junction, plus the street pieces and stations whose computed
+    UTCI today is at or above the `pct` percentile of all pieces and stations (the most heat-exposed places)."""
+    computed = [base_utci[p.id] for p in points if p.kind != "junction"]
+    cut = float(np.percentile(computed, pct)) if computed else math.inf
+    return frozenset(p.id for p in points if p.kind == "junction" or base_utci[p.id] >= cut)
+
+
 def load_dataset() -> Dataset:
     assumption_list = yaml.safe_load(ASSUMPTIONS_FILE.read_text(encoding="utf-8"))
     assumptions = {a["key"]: a["value"] for a in assumption_list}
@@ -722,12 +736,14 @@ def load_dataset() -> Dataset:
     _check(trails_raw, points_raw, catalogue, matches)
     if not weather_rows:
         raise RuntimeError("weather_hour is empty. Run: python scripts/export_to_db.py")
-    weather = design_weather(
-        weather_rows,
-        hour=int(assumptions["heat_reference_hour"]),
-        hot_pct=float(assumptions["hot_day_percentile"]),
-        overpass_hours=[int(h) for h in assumptions["landsat_overpass_hours"]],
-    )
+    hour = int(assumptions["heat_reference_hour"])
+    overpass = [int(h) for h in assumptions["landsat_overpass_hours"]]
+    weather = design_weather(weather_rows, hour=hour, hot_pct=float(assumptions["hot_day_percentile"]), overpass_hours=overpass)
+    typical_lo, typical_hi = (float(q) for q in assumptions["typical_day_percentiles"])
+    scenario_weather = {
+        "typical": weather_between(weather_rows, hour, typical_lo, typical_hi, overpass),
+        "heatwave": design_weather(weather_rows, hour, float(assumptions["heatwave_day_percentile"]), overpass),
+    }
 
     # Riders on a piece: its trail's spring riders; off the trails, the segment's assumed summer riders
     # (class median of the matched streets, from the seed) scaled by the trails' spring / summer ratio.
@@ -745,6 +761,10 @@ def load_dataset() -> Dataset:
     points = [_to_point(r) for r in points_raw]
     solar_min, solar_max = float(solar["lo"]), float(solar["hi"])
     base_utci, heat_inputs = _heat(points, trails, solar_min, solar_max, weather, assumptions)
+    scenario_utci = {
+        name: _heat(points, trails, solar_min, solar_max, w, assumptions)[0] for name, w in scenario_weather.items()
+    }
+    critical_ids = _critical_ids(points, base_utci, float(assumptions["critical_utci_percentile"]))
     for r in points_raw:
         r["utci_base_c"] = base_utci[r["id"]]
         r.update(heat_inputs[r["id"]])
@@ -772,6 +792,9 @@ def load_dataset() -> Dataset:
         weather=weather,
         off_trail_spring_ratio=spring_ratio,
         base_utci=base_utci,
+        scenario_weather=scenario_weather,
+        scenario_utci=scenario_utci,
+        critical_ids=critical_ids,
     )
 
 

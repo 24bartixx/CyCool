@@ -1,7 +1,7 @@
 import { ClipboardList, MousePointerClick, RotateCcw, Trash2, Undo2 } from 'lucide-react'
 import { memo, useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
-import { eur } from '../lib/format.ts'
+import { eur, eurShort } from '../lib/format.ts'
 import { FIX_ICON } from '../lib/icons.tsx'
 import { pointTitle } from '../lib/points.ts'
 
@@ -125,7 +125,7 @@ function PlanList({
                       {f.length_m > 0 && ` · ${Math.round(f.length_m)} m of street`}
                     </span>
                   </span>
-                  <span className="text-xs font-semibold tabular-nums">{eur(f.cost_eur)}</span>
+                  <span className="text-xs font-semibold tabular-nums" title={eur(f.cost_eur)}>{eurShort(f.cost_eur)}</span>
                 </button>
                 <button
                   type="button"

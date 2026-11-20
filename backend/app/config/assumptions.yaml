@@ -57,18 +57,54 @@
   unit: share
   source: team assumption
   note: Water access matters, but less than heat for a ~15 min trip. Weights are normalised to sum 1.
+- key: weight_wait
+  label: Weight of the red-light wait in the combined score (junctions only)
+  value: 0.25
+  unit: share
+  source: team assumption
+  note: At a traffic-light junction the combined score also counts how long riders wait in the sun, so a green wave (INT-05) lowers the junction's combined score and moves it down the worst list. Added to the other weights and renormalised at junctions only. In the combined burden the junction's time stays its original wait, so the green wave is not counted twice.
+- key: wait_ok_s
+  label: Red-light wait with wait score 0
+  value: 15
+  unit: s
+  source: catalogue
+  note: The green-wave wait (INT-05 "<15 s").
+- key: wait_bad_s
+  label: Red-light wait with wait score 1
+  value: 65
+  unit: s
+  source: catalogue
+  note: INT-05 "from 65 s". The VAS-R1 junction waits are 48-68 s. Linear in between.
 - key: comfortable_utci_c
   label: Comfortable cycling threshold
   value: 32
   unit: °C
   source: standard
-  note: UTCI above 32 °C is "strong heat stress"; a piece below it counts as climate-comfortable. On the hot afternoon of the model even full shade is ~34 °C, so only shaded streets get below it with trees (e.g. 34.5 - 4.5 = 30 °C) and a sunny street stays above it even with trees and cool pavement (37.6 - 4.5 - 0.45 = 32.65 °C); read it together with the km out of very strong heat and the °C reduction at critical points.
+  note: Upper bound of UTCI "moderate heat stress". The comfortable-km KPI applies it on a warm summer afternoon (typical_day_percentiles), where today ~39% of the network is below it. On the hot design afternoon no street is (34.6-37.8 °C), so that KPI would read 0% today whatever was built.
 - key: strong_heat_utci_c
   label: Very strong heat stress threshold
   value: 38
   unit: °C
   source: standard
-  note: UTCI 38 °C and above is "very strong heat stress"; a piece below it is at most in strong heat stress.
+  note: Lower bound of UTCI "very strong heat stress". The out-of-very-strong-heat KPI applies it on a heatwave afternoon (heatwave_day_percentile), where today ~44% of the network is above it. On the hot design afternoon every street is below it, so that KPI would read 100% today and could never improve.
+- key: typical_day_percentiles
+  label: Warm summer afternoon (comfort KPI)
+  value: [60, 80]
+  unit: percentile
+  source: team assumption
+  note: The July-August 2023-2025 days whose 14:00 air temperature lies between these percentiles (40 of 186 days, ~29 °C air), averaged like the hot afternoon. Comfort is judged on a warm but ordinary summer day, the day people decide whether to cycle; on the median day (~28 °C) most of the network is already comfortable, on the hot design day none is. Fixes keep their catalogue UTCI cut.
+- key: heatwave_day_percentile
+  label: Heatwave afternoon (very strong heat KPI)
+  value: 99
+  unit: percentile
+  source: team assumption
+  note: The hottest 1% of July-August afternoons at 14:00 (the 2 hottest of 186 days, ~34.2 °C air) - the peak heatwave a plan must withstand. With the hottest 2% (~33.8 °C) 94% of the network is already below 38 °C, so the KPI could barely move. Very strong heat stress is a heatwave risk, so it is measured on heatwave days. Fixes keep their catalogue UTCI cut.
+- key: critical_utci_percentile
+  label: Critical points (hottest share of the network)
+  value: 90
+  unit: percentile
+  source: team assumption
+  note: A street piece or bike station is critical when its computed UTCI today is in the hottest 10% of all pieces and stations; the 5 traffic-light junctions (waits in full sun) are always critical. Replaces the synthetic VAS-R1 "Critical" trail labels, which do not match the computed heat (e.g. TRM-12 is labelled Critical but is among the coolest).
 - key: heat_reference_hour
   label: Hour of the heat model
   value: 14
@@ -215,3 +251,21 @@
   unit: share
   source: team assumption
   note: INT-08 assumes every trip kept on a bike replaces a car trip. In summer some people walk, take the bus or don't travel instead, so only this share counts for CO₂ and € saved.
+- key: adapted_min_utci_drop_c
+  label: Minimum cooling for a km to count as adapted
+  value: 2
+  unit: °C
+  source: team assumption
+  note: A street piece counts towards "km of adapted route" only if the plan lowers its UTCI by at least this much. Cool pavement alone (catalogue cut below 2 °C) no longer counts, so painting cheap streets can't make the cost per adapted km look good; its cost still counts in that ratio.
+- key: rider_km_cap_from
+  label: Distance a won-back rider rides on one trail
+  value: trail length, at most one average trip (3.8 km)
+  unit: ""
+  source: team assumption
+  note: Rider-km = won-back riders x min(trail length, average trip). Assuming every rider rode the whole trail inflated trips on long trails.
+- key: fix_lifetime_yr
+  label: Service life of each fix
+  value: ["INT-01 → 30", "INT-02 → 10", "INT-03 → 15", "INT-04 → 7", "INT-05 → 10", "INT-06 → 20"]
+  unit: years
+  source: team assumption
+  note: The catalogue has no lifetime. Trees 30 yr, shade sail 10, oasis 15, cool pavement coating 7, green-wave controllers 10, solar canopy 20. Used to spread the one-off investment over the years, so the cost per new summer cyclist compares yearly cost with yearly benefit.

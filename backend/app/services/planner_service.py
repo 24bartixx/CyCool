@@ -13,6 +13,7 @@ from app.services.effect_service import (
     baseline_state,
     describe_fix,
     effect_summary,
+    offered,
     plan_state,
     target_key,
     validate_plan,
@@ -24,7 +25,8 @@ from app.services.metric_service import (
     burden,
     score_all,
     score_point,
-    severity,
+    rank_key,
+    riders,
     total_burden,
     unshaded_share,
 )
@@ -57,6 +59,8 @@ def _local_impacts(ds: Dataset, current: PointState, proposed: PointState, befor
     }
     if round(current.solar, 1) == round(proposed.solar, 1):
         measurements["sun"] = (100 * unshaded_share(current), 100 * unshaded_share(proposed), "%")
+    if current.wait_s != proposed.wait_s:
+        measurements["combined"] = (current.wait_s, proposed.wait_s, "s wait")
 
     impacts = []
     for metric in METRICS:
@@ -86,6 +90,7 @@ def static_map_data(ds: Dataset) -> dict:
                 **ds.catalogue[fid],
                 "label": rule["label"],
                 "allowed_on": sorted(rule["kinds"]),
+                "metrics": sorted(rule["metrics"]) if "metrics" in rule else None,
                 "priced_per_m": rule["linear"],
                 "effects": effect_summary(ds, fid),
             }
@@ -95,6 +100,7 @@ def static_map_data(ds: Dataset) -> dict:
         "solar_range": [ds.solar_min, ds.solar_max],
         "heat_model": {
             "weather": ds.weather.as_dict(),
+            "kpi_weather": {name: w.as_dict() for name, w in ds.scenario_weather.items()},
             "ground_albedo": a["ground_albedo"],
             "ground_emissivity": a["ground_emissivity"],
             "off_trail_spring_ratio": round(ds.off_trail_spring_ratio, 3),
@@ -147,11 +153,15 @@ def evaluate(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str, 
                 "id": p.id,
                 "scores": {k: round(v, 4) for k, v in sc.as_dict().items()},
                 "raw": _raw(ds, p, state[p.id]),
-                "priority": round(severity(ds, p, sc.get(metric)), 3),
-                "burden": round(burden(ds, p, state[p.id], sc.get(metric)), 4),
+                "priority": round(sc.get(metric), 4),
+                "riders": round(riders(ds, p), 1),
+                "burden": round(burden(ds, p, state[p.id], sc.get(metric), metric), 4),
             }
         )
-    worst = sorted((r for r in rows if r["priority"] > 0), key=lambda r: (-r["priority"], r["id"]))[:WORST_N]
+    worst_ids = sorted(
+        (p for p, r in zip(ds.points, rows) if r["priority"] > 0), key=lambda p: rank_key(ds, p, scores[p.id].get(metric))
+    )[:WORST_N]
+    worst = [{"id": p.id} for p in worst_ids]
     spent = sum(f.cost_eur for f in plan)
     burden_before = total_burden(ds, base, base_scores, metric)
     burden_now = total_burden(ds, state, scores, metric)
@@ -203,6 +213,8 @@ def recommend(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
     options = []
     for fix_id, rule in FIX_RULES.items():
         if point.kind not in rule["kinds"]:
+            continue
+        if fix_id not in applied_here and not offered(fix_id, metric):
             continue
         priced = describe_fix(ds, fix_id, point)
         if fix_id in applied_here:
@@ -271,7 +283,7 @@ def auto_plan(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
     candidates: dict[tuple[str, str], tuple[str, str, float]] = {}
     for p in ds.points:
         for fix_id, rule in FIX_RULES.items():
-            if p.kind not in rule["kinds"]:
+            if p.kind not in rule["kinds"] or not offered(fix_id, metric):
                 continue
             key = (fix_id, target_key(ds, fix_id, p))
             if key in taken or key in candidates:
@@ -283,8 +295,8 @@ def auto_plan(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str,
         delta = 0.0
         for q in ds.points:
             if new_state[q.id] is not state[q.id]:
-                before = burden(ds, q, state[q.id], scores[q.id].get(metric))
-                after = burden(ds, q, new_state[q.id], score_point(ds, q, new_state[q.id]).get(metric))
+                before = burden(ds, q, state[q.id], scores[q.id].get(metric), metric)
+                after = burden(ds, q, new_state[q.id], score_point(ds, q, new_state[q.id]).get(metric), metric)
                 delta += before - after
         return delta, new_state
 
