@@ -5,13 +5,6 @@ import { dec1, dec2, eurShort } from '../lib/format.ts'
 import { FIX_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
 import ScoreChip from './ScoreChip.tsx'
 
-const METRIC_SUBJECT: Record<MetricId, string> = {
-  water: 'water access',
-  sun: 'sun exposure',
-  heat: 'heat stress',
-  combined: 'overall cycling comfort',
-}
-
 const IMPACT_LABEL: Record<MetricId, string> = {
   water: 'Drinking water',
   sun: 'Solar index',
@@ -147,7 +140,6 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
 }
 
 export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy, onAccept }: Props) {
-  const MetricIcon = METRIC_ICON[metric]
   const options = rec.data?.point_id === point.id ? rec.data.options : undefined
   const useful = options?.filter((o) => o.status === 'available' || o.status === 'over_budget' || o.status === 'applied') ?? []
   const bestId = options?.find((o) => o.status === 'available')?.fix_id
@@ -161,13 +153,6 @@ export default function RecommendedFixes({ point, metric, rec, nextWorstId, busy
           </h3>
           {rec.loading && <LoaderCircle className="size-4 animate-spin text-muted" aria-label="Loading" />}
         </div>
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-          Fixes for{' '}
-          <strong className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2 py-1 font-semibold text-primary">
-            <MetricIcon className="size-3.5 shrink-0" aria-hidden />
-            {METRIC_SUBJECT[metric]}
-          </strong>
-        </p>
       </div>
       {rec.error && (
         <p role="alert" className="rounded-lg bg-danger-soft p-2.5 text-xs text-danger">

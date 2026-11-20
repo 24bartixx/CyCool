@@ -66,11 +66,7 @@ export default function PointTypeFilter({ value, counts, onChange }: Props) {
               </span>
               <Icon className={`size-4 shrink-0 ${on ? 'text-primary' : 'text-muted'}`} aria-hidden />
               <span className={`flex-1 truncate font-medium ${on ? 'text-foreground' : 'text-muted'}`}>{label}</span>
-              <span
-                className={`rounded-full px-2 py-px text-[11px] font-medium tabular-nums ${
-                  on ? 'bg-primary-soft text-primary' : 'bg-background text-muted'
-                }`}
-              >
+              <span className="text-[11px] font-medium tabular-nums text-muted">
                 {counts[kind]}
                 <span className="sr-only"> to fix</span>
               </span>

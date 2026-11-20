@@ -1,4 +1,5 @@
 import { FileDown, LoaderCircle } from "lucide-react";
+import Wordmark from "./Wordmark.tsx";
 
 type Props = {
   onExport: () => void;
@@ -16,12 +17,8 @@ export default function AppHeader({
 }: Props) {
   return (
     <header className="z-[1100] flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-      <img src="/favicon.svg" alt="" className="size-8" />
-      <div className="mr-auto min-w-0 leading-tight">
-        <p className="font-semibold tracking-tight text-primary">CoolCycle</p>
-        <p className="truncate text-xs text-muted">
-          Heat-comfort planner for Viladecans cycle trails
-        </p>
+      <div className="mr-auto min-w-0">
+        <Wordmark className="h-9 w-auto" />
       </div>
       {exportFailed && (
         <span role="alert" className="hidden text-xs text-danger md:inline">

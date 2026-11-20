@@ -46,7 +46,6 @@ function WorstList({
 }: Props) {
   const [limit, setLimit] = useState(readTop);
   const worst = ranked.slice(0, limit);
-  const top = worst.length ? (resultsById.get(worst[0])?.priority ?? 0) : 0;
 
   function changeLimit(n: number) {
     setLimit(n);
@@ -58,7 +57,7 @@ function WorstList({
   }
   return (
     <section aria-labelledby="worst-h" className="space-y-2.5">
-      <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
         <h2
           id="worst-h"
           className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-muted"
@@ -68,14 +67,7 @@ function WorstList({
           </span>
           <span className="truncate">Worst points</span>
         </h2>
-        <div className="flex items-center justify-between gap-3 pl-7">
-          <p className="text-xs text-muted">
-            <span className="font-semibold tabular-nums text-foreground">
-              {ranked.length}
-            </span>{" "}
-            {ranked.length === 1 ? "point" : "points"} to fix
-          </p>
-          {ranked.length > 0 && (
+        {ranked.length > 0 && (
             <select
               aria-label="How many worst points to list"
               value={limit}
@@ -88,8 +80,7 @@ function WorstList({
                 </option>
               ))}
             </select>
-          )}
-        </div>
+        )}
       </div>
       {worst.length === 0 ? (
         <p className="rounded-lg border border-border p-3 text-sm text-muted">
@@ -135,17 +126,6 @@ function WorstList({
                     </span>
                     <span className="block truncate text-[11px] text-muted">
                       {KIND_SHORT[p.kind]}
-                    </span>
-                    <span
-                      className="mt-1 block h-1 overflow-hidden rounded-full bg-border"
-                      aria-hidden
-                    >
-                      <span
-                        className="block h-full rounded-full bg-score-3"
-                        style={{
-                          width: `${top > 0 ? (r.priority / top) * 100 : 0}%`,
-                        }}
-                      />
                     </span>
                   </span>
                   <ScoreChip score={r.scores[metric]} metric={metric} />

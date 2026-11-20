@@ -1,4 +1,5 @@
-import { Droplet } from "lucide-react";
+import { Droplet, ListTree, X } from "lucide-react";
+import { useState } from "react";
 import type { MetricId } from "../api/planner.ts";
 import { dec2 } from "../lib/format.ts";
 import { METRIC_SHORT } from "../lib/icons.tsx";
@@ -10,16 +11,61 @@ type Props = {
   filtered?: boolean;
 };
 
+const HIDDEN_KEY = "cc.legendHidden";
+
+function readHidden(): boolean {
+  try {
+    return localStorage.getItem(HIDDEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function Legend({ metric, filtered = false }: Props) {
   const { breaks } = useScoreScale(metric);
+  const [hidden, setHidden] = useState(readHidden);
+
+  function changeHidden(next: boolean) {
+    setHidden(next);
+    try {
+      localStorage.setItem(HIDDEN_KEY, next ? "1" : "0");
+    } catch {
+      /* per-viewer convenience only */
+    }
+  }
+
+  if (hidden) {
+    return (
+      <button
+        type="button"
+        data-map-overlay
+        onClick={() => changeHidden(false)}
+        className="absolute bottom-6 left-3 z-[1000] hidden items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-primary md:inline-flex"
+      >
+        <ListTree className="size-3.5" aria-hidden /> Show legend
+      </button>
+    );
+  }
+
   return (
     <div
       data-map-overlay
       className="absolute bottom-6 left-3 z-[1000] hidden w-52 md:block rounded-xl border border-border bg-surface/95 p-3 text-[11px] shadow-sm backdrop-blur"
     >
-      <p className="mb-1.5 font-semibold text-foreground">
-        {METRIC_SHORT[metric]} score
-      </p>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="font-semibold text-foreground">
+          {METRIC_SHORT[metric]} score
+        </p>
+        <button
+          type="button"
+          onClick={() => changeHidden(true)}
+          aria-label="Hide legend"
+          title="Hide legend"
+          className="-mr-1 grid size-5 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      </div>
       <ul className="space-y-0.5">
         {SCORE_CLASSES.map((c, i) => (
           <li key={c.key} className="flex items-center gap-2">
