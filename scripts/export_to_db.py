@@ -122,6 +122,27 @@ INTERVENTION_UNITS: dict[str, tuple[str, str]] = {
     "INT-08": ("reference", "network"),  # modal-shift benchmark, not an intervention
 }
 
+# Catalogue entries that are not in the VAS-R1 GeoPackage (team additions). Placed by the user in the planner
+# like any other fix; not linked to any segment here.
+EXTRA_INTERVENTIONS: list[dict[str, Any]] = [
+    {
+        "id": "INT-09",
+        "category": "Micro_Shelter_and_Hydration",
+        "description": "Drinking water fountain (public, accessible, bottle refill)",
+        "unit_label": "fountain",
+        "unit_kind": "per_site",
+        "applies_to": "segment",
+        "capex_eur": 4000,
+        "opex_eur_yr": 250,
+        "surface_temp_reduction_c": 0.0,
+        "utci_improvement_c": 0.0,
+        "co2_kg_yr": 0.0,
+        "deployment_weeks": 2,
+        "notes": "Team estimate (not in the VAS-R1 catalogue): ~4,000 EUR installed incl. water connection; "
+                 "opex covers water, cleaning and maintenance. Adds drinking water only, no shade or cooling.",
+    },
+]
+
 DATA_TABLES = [
     "plan_item", "plan", "segment_metrics", "syn_segment_link", "syn_point", "syn_segment", "hourly_profile",
     "intervention_type", "osm_park", "weather_hour", "city_facility", "ambici_station", "drinking_fountain", "cycle_segment",
@@ -305,6 +326,7 @@ def seed_synthetic(cur: psycopg.Cursor, gpkg: sqlite3.Connection, source_id: int
             "deployment_weeks": r["deployment_time_weeks"],
             "notes": r["notes"],
         })
+    interventions += [{**extra, "source_id": source_id} for extra in EXTRA_INTERVENTIONS]
     upsert(cur, "intervention_type", interventions)
 
     upsert(cur, "hourly_profile", [

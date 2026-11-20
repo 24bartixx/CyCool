@@ -135,6 +135,19 @@ def test_oasis_brings_water_within_reach():
     assert state[target.id].water_dist_m < 0.01  # oasis sits on the point (coords rounded to cm)
 
 
+def test_drinking_fountain_adds_water_without_cooling():
+    target = max((p for p in ds.points if p.kind == "segment"), key=lambda p: p.fountain_dist_m)
+    base = baseline_state(ds)
+    state = plan_state(ds, [("INT-09", target.id)])
+    assert state[target.id].water_dist_m < 0.01
+    assert all(state[p.id].utci == base[p.id].utci and state[p.id].solar == base[p.id].solar for p in ds.points)
+    (fix,) = validate_plan(ds, [("INT-09", target.id)], 1e9)
+    assert fix.cost_eur == 4000
+    with pytest.raises(PlanError):
+        validate_plan(ds, [("INT-09", first("junction").id)], 1e9)  # street pieces only
+    assert evaluate(ds, "water", 1e9, [("INT-09", target.id)])["new_fountains"][0]["point_id"] == target.id
+
+
 def test_trees_halve_solar_and_cool():
     p = first("segment")
     base = baseline_state(ds)[p.id]

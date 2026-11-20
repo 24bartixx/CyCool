@@ -2,7 +2,7 @@ import { ClipboardList, MousePointerClick, RotateCcw, Trash2, Undo2 } from 'luci
 import { memo, useEffect, useRef } from 'react'
 import type { Evaluation, MapPointInfo } from '../api/planner.ts'
 import { eur2 } from '../lib/format.ts'
-import { FIX_ICON } from '../lib/icons.tsx'
+import { FIX_ICON, fixBg } from '../lib/icons.tsx'
 import { pointTitle } from '../lib/points.ts'
 
 type Props = {
@@ -113,7 +113,7 @@ function PlanList({
                     active ? 'border-primary bg-primary-soft' : 'border-transparent hover:border-border hover:bg-surface-2'
                   }`}
                 >
-                  <span className={`grid size-7 place-items-center rounded-full text-white ${f.fix_id === 'INT-03' ? 'bg-water' : 'bg-primary'}`}>
+                  <span className={`grid size-7 place-items-center rounded-full text-white ${fixBg(f.fix_id)}`}>
                     <Icon className="size-3.5" aria-hidden />
                   </span>
                   <span className="min-w-0">

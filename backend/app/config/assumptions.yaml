@@ -265,7 +265,7 @@
   note: Rider-km = won-back riders x min(trail length, average trip). Assuming every rider rode the whole trail inflated trips on long trails.
 - key: fix_lifetime_yr
   label: Service life of each fix
-  value: ["INT-01 → 30", "INT-02 → 10", "INT-03 → 15", "INT-04 → 7", "INT-05 → 10", "INT-06 → 20"]
+  value: ["INT-01 → 30", "INT-02 → 10", "INT-03 → 15", "INT-04 → 7", "INT-05 → 10", "INT-06 → 20", "INT-09 → 15"]
   unit: years
   source: team assumption
-  note: The catalogue has no lifetime. Trees 30 yr, shade sail 10, oasis 15, cool pavement coating 7, green-wave controllers 10, solar canopy 20. Used to spread the one-off investment over the years, so the cost per new summer cyclist compares yearly cost with yearly benefit.
+  note: The catalogue has no lifetime. Trees 30 yr, shade sail 10, oasis 15, cool pavement coating 7, green-wave controllers 10, solar canopy 20, drinking fountain 15. Used to spread the one-off investment over the years, so the cost per new summer cyclist compares yearly cost with yearly benefit.

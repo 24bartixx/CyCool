@@ -149,7 +149,7 @@ function GainBadge({ pp, hasPlan }: { pp: number; hasPlan: boolean }) {
   if (!hasPlan) return null
   if (pp < 0.05) return <span className="whitespace-nowrap text-xs font-medium text-muted">no change</span>
   return (
-    <span className="whitespace-nowrap rounded-full bg-gain-soft px-1.5 py-px text-xs font-bold text-gain" title="Change since today in percentage points">
+    <span className="whitespace-nowrap text-xs font-bold text-gain" title="Change since today in percentage points">
       +{dec1(pp)} <span aria-hidden="true">pp</span>
       <span className="sr-only">percentage points since today</span>
     </span>

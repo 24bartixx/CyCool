@@ -184,6 +184,9 @@ def evaluate(ds: Dataset, metric: str, budget: float, accepted: list[tuple[str, 
         "oases": [
             {"point_id": pid, "wgs": ds.points_by_id[pid].raw["mid_wgs"]} for fid, pid in accepted if fid == "INT-03"
         ],
+        "new_fountains": [
+            {"point_id": pid, "wgs": ds.points_by_id[pid].raw["mid_wgs"]} for fid, pid in accepted if fid == "INT-09"
+        ],
         "burden": {
             "baseline": burden_before,
             "current": burden_now,

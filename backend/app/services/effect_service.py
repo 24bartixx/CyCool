@@ -20,7 +20,11 @@ FIX_RULES: dict[str, dict] = {
     # Offered only under the combined metric: it shortens the wait, which only the combined score counts.
     "INT-05": {"label": "Green-wave traffic lights", "kinds": {"junction"}, "linear": False, "metrics": {"combined"}},
     "INT-06": {"label": "Station solar canopy", "kinds": {"station"}, "linear": False},
+    "INT-09": {"label": "Drinking fountain", "kinds": {"segment"}, "linear": False},
 }
+
+# Fixes that add a drinking-water point at the middle of the piece they are placed on.
+WATER_FIXES = ("INT-03", "INT-09")
 
 
 def offered(fix_id: str, metric: str) -> bool:
@@ -169,10 +173,10 @@ def apply_fix(ds: Dataset, state: dict[str, PointState], fix_id: str, point: Map
     elif fix_id == "INT-06":
         s = _cool(ds, new[point.id], cut)
         new[point.id] = replace(s, solar=s.solar * (1 - a["canopy_solar_cut"]))
-    elif fix_id == "INT-03":
-        # A rest and water stop beside the route. Water reaches every point nearby. Its pergola and mist
-        # cool the people who stop at the oasis itself, not riders passing by or waiting in a traffic-light
-        # box, so it changes no UTCI or sun on the network.
+    elif fix_id in WATER_FIXES:
+        # A water stop beside the route (oasis or plain fountain). Water reaches every point nearby. The oasis
+        # pergola and mist cool the people who stop at it, not riders passing by or waiting in a traffic-light
+        # box, so neither changes UTCI or sun on the network.
         oasis = point.mid
         for q in ds.points:
             dist = q.geom.distance(oasis)
@@ -211,4 +215,6 @@ def effect_summary(ds: Dataset, fix_id: str) -> list[str]:
             f"{utci} only for people who stop at the oasis",
             "no cooling for riders passing or waiting at a red light",
         ]
+    if fix_id == "INT-09":
+        return ["adds drinking water", "no shade or cooling"]
     return [utci]

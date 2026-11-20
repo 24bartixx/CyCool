@@ -2,7 +2,7 @@ import { ArrowRight, Check, CircleCheck, Info, LoaderCircle, Thermometer, Triang
 import { useId } from 'react'
 import type { FixImpact, FixOption, MapPointInfo, MetricId, Recommendation } from '../api/planner.ts'
 import { dec1, dec2, eurShort } from '../lib/format.ts'
-import { FIX_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
+import { FIX_ICON, METRIC_ICON, METRIC_SHORT, fixBg } from '../lib/icons.tsx'
 import ScoreChip from './ScoreChip.tsx'
 
 const IMPACT_LABEL: Record<MetricId, string> = {
@@ -72,7 +72,7 @@ function OptionCard({ o, best, metric, busy, onAccept }: { o: FixOption; best: b
   return (
     <li className={`rounded-xl border bg-surface px-3 py-4 ${best ? 'border-primary shadow-sm ring-1 ring-primary/20' : 'border-border'}`}>
       <div className="flex items-center gap-2">
-        <span className={`grid size-7 shrink-0 place-items-center rounded-md text-white ${o.fix_id === 'INT-03' ? 'bg-water' : 'bg-primary'}`}>
+        <span className={`grid size-7 shrink-0 place-items-center rounded-md text-white ${fixBg(o.fix_id)}`}>
           <Icon className="size-3.5" aria-hidden />
         </span>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2">

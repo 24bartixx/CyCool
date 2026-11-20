@@ -52,6 +52,9 @@
   /* Data: water and context */
   --color-water: #2a78d6;
   --color-water-soft: #dbe9fa;
+  /* Cyclist oasis (INT-03) fix: aquamarine, a greener cousin of the water blue. Darkened from pure aquamarine
+     (#7fffd4) so the white icon on it stays legible (~3:1). */
+  --color-oasis: #13a386;
   --color-network: #b9b6ac;
   /* Context layers: parks (OSM outlines) in leaf green, clearly apart from the teal "fine" score; Bicibox bike
      parkings in charcoal, so they don't read as a score-coloured AMBici station or as water. */

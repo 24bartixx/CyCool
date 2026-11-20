@@ -53,7 +53,7 @@ EXCLUDED_CLASSES = ("Carril Bici_En Projecte DIBA",)  # planned, not built
 EXCLUDED_FOUNTAIN_LOCATIONS = ("Cementiri",)  # not on cyclists' routes
 BIKE_PARKING = ("Transport", "Estacions Bicibox")  # municipal facility (category, subcategory)
 JUNCTION_CATEGORY = "Critical Traffic Light Junction"
-CATALOGUE_IDS = ("INT-01", "INT-02", "INT-03", "INT-04", "INT-05", "INT-06")
+CATALOGUE_IDS = ("INT-01", "INT-02", "INT-03", "INT-04", "INT-05", "INT-06", "INT-09")
 MODAL_SHIFT_ID = "INT-08"  # not a fix: CO2 and € per replaced trip, used by the KPIs
 
 

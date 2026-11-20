@@ -124,6 +124,9 @@
 .cc-fix-badge--water {
   background: var(--color-water);
 }
+.cc-fix-badge--oasis {
+  background: var(--color-oasis);
+}
 
 .cc-worst-ring {
   width: 44px;

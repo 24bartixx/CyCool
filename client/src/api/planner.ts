@@ -207,6 +207,7 @@ export type Evaluation = {
   budget: { total: number; spent: number; remaining: number }
   plan: (AcceptedFix & { label: string; cost_eur: number; opex_eur_yr: number; length_m: number })[]
   oases: { point_id: string; wgs: LatLng }[]
+  new_fountains: { point_id: string; wgs: LatLng }[]
   burden: { baseline: number; current: number; reduction_pct: number | null }
   kpis: Kpis
 }

@@ -35,7 +35,7 @@ import type {
   PointResult,
 } from "../api/planner.ts";
 import { dec2, metres } from "../lib/format.ts";
-import { FIX_ICON, METRIC_SHORT } from "../lib/icons.tsx";
+import { FIX_ICON, FIX_TONE, METRIC_SHORT } from "../lib/icons.tsx";
 import { isOffTrail, pointTitle } from "../lib/points.ts";
 import { cssVar, scoreColor as colorFor, useScoreScale } from "../lib/scale.ts";
 import Legend from "./Legend.tsx";
@@ -95,7 +95,7 @@ function nodeIcon(
 
 /**
  * A drinking fountain: context, not a point to fix, so smaller than the junction and station markers and always
- * water blue. A single droplet, where the Cyclist Oasis fix badge shows several (INT-03 in FIX_ICON).
+ * water blue. A single droplet, where a planned fountain fix (INT-09 in FIX_ICON) shows the same droplet as its badge.
  */
 const FOUNTAIN_PX = 18;
 /** Tint of the water reach area around fountains and oases (applied once to the whole pane, see the reach pane). */
@@ -191,7 +191,7 @@ function fixBadge(fixId: string, slot: number): L.DivIcon {
   if (hit) return hit;
   const Glyph = FIX_ICON[fixId];
   const icon = L.divIcon({
-    html: `<div class="cc-fix-badge${fixId === "INT-03" ? " cc-fix-badge--water" : ""}">${renderToStaticMarkup(
+    html: `<div class="cc-fix-badge${FIX_TONE[fixId] ? ` cc-fix-badge--${FIX_TONE[fixId]}` : ""}">${renderToStaticMarkup(
       <Glyph size={12} strokeWidth={2.5} aria-hidden />,
     )}</div>`,
     className: "",
@@ -929,7 +929,7 @@ export default function MapView({
               />
             ))}
           {showPlan &&
-            evaluation?.oases.map((o) => (
+            [...(evaluation?.oases ?? []), ...(evaluation?.new_fountains ?? [])].map((o) => (
               <Circle
                 key={`oasis-${o.point_id}`}
                 center={o.wgs}
@@ -946,7 +946,7 @@ export default function MapView({
         {/* Oasis outlines in a pane of their own so the reach pane's fade doesn't wash them out. */}
         <Pane name="reach-outline" style={{ zIndex: 391 }}>
           {showPlan &&
-            evaluation?.oases.map((o) => (
+            [...(evaluation?.oases ?? []), ...(evaluation?.new_fountains ?? [])].map((o) => (
               <Circle
                 key={`oasis-outline-${o.point_id}`}
                 center={o.wgs}
