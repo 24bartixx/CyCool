@@ -4,12 +4,15 @@
  * Every `--color-<name>` token becomes a Tailwind utility (bg-<name>, text-<name>, border-<name>/50 ...)
  * and a plain CSS variable (var(--color-<name>)). The map reads the score ramp from these variables too.
  *
- * Score ramp: 5 ordinal classes, green -> amber -> orange -> rust -> brown (low -> worst). The classes are
- * percentiles of today's network per metric (lib/scale.ts), so most of the map reads green or amber and brown
- * marks the worst spots. Checked with the dataviz validator (--ordinal, surface #f4f3ef): monotone lightness,
- * steps >= 0.06 apart, light end 2.2:1 on the surface. Its one-hue check fails on purpose (the hue walks from
- * green to brown); lightness alone still orders the classes for colour-blind readers.
- * "score-fine" (cool teal) marks points with a score of ~0 (nothing to fix).
+ * Score ramp: 5 ordinal classes, green -> yellow -> orange -> red -> brown (low -> worst). The classes are
+ * percentiles of today's network per metric (lib/scale.ts), so most of the map reads green or yellow and brown
+ * marks the worst spots. Colours were picked by eye on the map, then checked with the dataviz validator: yellow
+ * (#ebb028, L 0.80) is lighter than the green, so lightness does not order Low vs Moderate, but their hues stay
+ * apart even for colour-blind readers (protan ΔE 10.3). Yellow -> orange -> red -> brown runs light -> dark with
+ * steps >= 0.06; yellow vs orange is 16.8 (normal) / 13.8 (deutan), orange vs red 17.2 (normal), red vs brown
+ * 8.4 (protan). Yellow is only 1.8:1 on the surface: it relies on the line width to show.
+ * "score-fine" (teal, L 0.62, a bit darker than the green so it doesn't look washed out next to the others) marks
+ * points with a score of ~0 (nothing to fix). Teal vs green: normal ΔE 13.1, protan 12.7.
  */
 @theme static {
   /* Brand: deep teal = shade / cool */
@@ -39,12 +42,12 @@
   --color-danger-soft: #fdecea;
 
   /* Data: score ramp (0 = fine ... 1 = worst) */
-  --color-score-fine: #4f9a94;
-  --color-score-1: #7ab557;
-  --color-score-2: #bd7d00;
-  --color-score-3: #ba5702;
-  --color-score-4: #983e1b;
-  --color-score-5: #682d18;
+  --color-score-fine: #1d97a3;
+  --color-score-1: #69a254;
+  --color-score-2: #ebb028;
+  --color-score-3: #de6907;
+  --color-score-4: #b71727;
+  --color-score-5: #5a2a1c;
 
   /* Data: water and context */
   --color-water: #2a78d6;

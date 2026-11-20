@@ -9,7 +9,7 @@ import { KPI_ICON, METRIC_ICON, METRIC_SHORT } from '../lib/icons.tsx'
  *  - chip tone = what the tile is about (cool/shade = teal, water = blue, CO₂ = neutral);
  *  - green (gain) = what the plan added, in both the badges and the bars.
  * Bar baselines use score-fine (not the brand teal) because brand teal next to gain green failed the
- * normal-vision ΔE floor (13.5 < 15) in the dataviz validator; score-fine passes (16.5) and is the map's
+ * normal-vision ΔE floor (13.5 < 15) in the dataviz validator; score-fine passes (16.9) and is the map's
  * "fine" colour, which is what "comfortable" means. The 2px surface gap between parts is the backup cue.
  */
 type Tone = 'cool' | 'water' | 'neutral'

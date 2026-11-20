@@ -742,6 +742,7 @@ export default function MapView({
   const [showPlan, setShowPlan] = useState(true);
   const [showFountains, setShowFountains] = useState(false);
   const [showShade, setShowShade] = useState(false);
+  const [showParks, setShowParks] = useState(false);
   const [showBikeParking, setShowBikeParking] = useState(false);
 
   const results = useMemo(
@@ -890,7 +891,7 @@ export default function MapView({
                 </Tooltip>
               </Circle>
             ))}
-          {showShade && (
+          {showParks && (
             <GeoJSON
               data={mapData.parks}
               style={{
@@ -1177,9 +1178,14 @@ export default function MapView({
             set: setShowPlan,
           },
           {
-            label: `Shade spots (parks and oases)`,
+            label: "Shade area (parks and oases)",
             checked: showShade,
             set: setShowShade,
+          },
+          {
+            label: "Parks",
+            checked: showParks,
+            set: setShowParks,
           },
           {
             label: "Drinking fountains",
